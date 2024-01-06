@@ -1,0 +1,23 @@
+{
+    "name": "moota/moota-super-plugin",
+    "description": "Moota for Wordpress plugin, supporting WooCommerce & EDD",
+    "license": "M.I.T",
+    "autoload": {
+        "psr-4": {
+            "Moota\\MootaSuperPlugin\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Diki Akbar",
+            "email": "diki.akbar1304@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "jeffreyvanrossum/wp-settings": "^1.2",
+        "mootaco/moota-php-sdk": "dev-dev",
+        "weew/helpers-array": "^1.3",
+        "symfony/cache": "^5.4"
+    }
+}

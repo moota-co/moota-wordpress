@@ -1,0 +1,45 @@
+{
+    "name": "mootaco/moota-php-sdk",
+    "description": "Moota PHP SDK",
+    "type": "library",
+    "license": "MIT",
+    "version": "2.0.0",
+    "authors": [
+        {
+            "name": "Rezza Kurniawan",
+            "email": "rezza.kurniawan@gmail.com"
+        },
+        {
+            "name": "Mugiono Arif S",
+            "email": "mugypleci@gmail.com"
+        },
+        {
+            "name": "Diki Akbar Asyidiq",
+            "email": "diki.akbar1304@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "php": ">=7.4",
+        "ext-curl": "*",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Moota\\Moota\\": "src/"
+        }
+    },
+    "require-dev": {
+        "phpunit/phpunit": "5.7.*"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Test\\":[
+                "tests/"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit"
+    }
+}
