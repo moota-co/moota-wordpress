@@ -84,6 +84,8 @@ class MootaWebhook {
 
 			$response = $request->get_body();
 
+			$moota_mode = array_get($moota_settings ?? [], 'moota_production_mode', 0);
+
 			$secret   = array_get($moota_settings, "moota_webhook_secret_key");
 
 			$ip = self::get_client_ip();
@@ -92,11 +94,11 @@ class MootaWebhook {
 
 			$log      = '';
 
-			if ( hash_equals( $http_signature, $signature ) && $ip == "103.236.201.178") {
+			if ( !$moota_mode || (hash_equals( $http_signature, $signature ) && $ip == "103.236.201.178") ) {
 
 				foreach(json_decode($response, true) as $mutation)
 				{
-					$verify = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->verifyMutation($mutation);
+					$verify = $moota_mode ? (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->verifyMutation($mutation):true;
 
 					if(!$verify){
 						

@@ -26,6 +26,8 @@ class PluginLoader
 
 		add_action( 'admin_menu', [$this, 'register_setting_page'] );
 
+		add_action('admin_notices', [$this, 'production_mode_notice']);
+
 	}
 
 	public static function init() {
@@ -122,6 +124,15 @@ class PluginLoader
 		/**
 		 * API Setting Fields
 		 */
+		$api_section->add_option('select', [
+			'name' => 'moota_production_mode',
+			'label' => __('Select Mode'),
+			'options' => [
+				0 => "Testing",
+				1 => "Production"
+			]
+		]);
+
 		$api_section->add_option('text', [
 			'name' => 'moota_v2_api_key',
 			'label' => __('Moota V2 API Key')
@@ -222,6 +233,25 @@ class PluginLoader
 
 		$settings->make();
 
+	}
+
+	public function production_mode_notice()
+	{
+		$moota_settings = get_option("moota_settings");
+
+
+		if(array_get($moota_settings ?? [], 'moota_production_mode', 0)){
+			return;
+		}
+
+		?>
+
+		<div class="update-nag notice" style="display: block;">
+            <p><?php _e( '<b>Moota Wordpress</b> dalam mode <b>testing</b>. Fitur verifikasi mutasi, verifikasi signature dan whitelist IP dimatikan.', 'moota-super-plugin' ); ?>
+            </p>
+        </div>
+
+		<?php
 	}
 
 }
