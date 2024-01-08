@@ -70,11 +70,36 @@ class MootaPayment
         return (object)$payments;
     }
 
-    public function attachTransactionId(string $mutation_id, mixed $transaction_id)
+    public function createTag(string $name)
+    {
+        $registered_tags = MootaApi::getTag();
+
+        $count = 0;
+
+        foreach($registered_tags as $tag){
+            if($tag->name == $name){
+                $count++;
+            }
+        }
+
+        if(!$count){
+
+            MootaApi::createTag($name);
+
+            return true;
+        }
+
+        return true;
+
+    }
+
+    public function attachTransactionId(string $mutation_id, ?string $transaction_id)
     {
         if(empty($this->access_token)){
             return null;
         }
+
+        $this->createTag($transaction_id);
 
         MootaApi::attachMutationTag($mutation_id, [$transaction_id]);
     }
@@ -85,6 +110,8 @@ class MootaPayment
             return null;
         }
 
+        $this->createTag($merchant);
+
         MootaApi::attachMutationTag($mutation_id, [$merchant]);
     }
 
@@ -93,6 +120,8 @@ class MootaPayment
         if(empty($this->access_token)){
             return null;
         }
+
+        $this->createTag($platform);
 
         MootaApi::attachMutationTag($mutation_id, [$platform]);
     }
@@ -103,11 +132,7 @@ class MootaPayment
             return false;
         }
 
-        // die(var_dump(MootaApi::getMutationList($mutation['bank_id'])->data));
-
         $mutations = MootaApi::getMutationList($mutation['bank_id']);
-
-        // die(var_dump($mutations));
 
         $match_count = 0;
 
@@ -136,6 +161,8 @@ class MootaPayment
             return null;
         }
 
+        $moota_settings = get_option("moota_settings");
+
         $log_path = "refresh_mutation_{$bank_id}.log";
 
         $log = $this->getLog($log_path);
@@ -147,7 +174,7 @@ class MootaPayment
 
         $this->writeLog($log_path, [
             "last_request" => $current_time,
-            "next_request" => ($current_time + (60*5))
+            "next_request" => ($current_time + (60 *  array_get($moota_settings, "moota_refresh_mutation_interval", 5)))
         ]);
 
         return MootaApi::refreshMutationNow($bank_id);

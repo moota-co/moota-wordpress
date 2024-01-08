@@ -65,6 +65,25 @@ class MootaApi
         );
     }
 
+    public static function getTag() : ?object
+    {
+        return ApiRequester::get(
+            Config::BASE_URL . Config::ENDPOINT_TAGGING_INDEX,
+            Config::$ACCESS_TOKEN
+        );
+    }
+
+    public static function createTag(string $name) : ?object
+    {
+        return ApiRequester::post(
+            Config::BASE_URL . Config::ENDPOINT_TAGGING_INDEX,
+            Config::$ACCESS_TOKEN,
+            [
+                "name" => $name
+            ]
+        );
+    }
+
     public function __clone()
     {
     }

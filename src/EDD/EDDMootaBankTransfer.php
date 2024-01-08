@@ -196,7 +196,7 @@ class EDDMootaBankTransfer {
             $unique_end = array_get($moota_settings, "moota_unique_code_end", 1);
             $unique_verification = array_get($moota_settings, "unique_code_verification_type", "nominal");
 
-            if ( $unique_code  && (int) $purchase_data['price'] > 0 && $unique_verification == "nominal") {
+            if ( $unique_code  && (int) $purchase_data['price'] > 0) {
                 $amount = rand($unique_start, $unique_end);
                 if ($unique_type == 'decrease') {
                     $amount = $amount * -1;
@@ -215,7 +215,7 @@ class EDDMootaBankTransfer {
 
             $payment_model->add_meta("bank_id", $bank_id, true);
 
-            if($unique_verification == "news"){
+            if($unique_code){
                 $payment_model->add_meta("news_code", $this->generateRandomString(5), true);
             }
 
@@ -291,7 +291,7 @@ class EDDMootaBankTransfer {
     }
 
     private function generateRandomString($length = 10) {
-        $characters = '0123456789abcdefghijklmnopqrstuvwxyz';
+        $characters = '2345678abcdefhjkmnpqrstuvwxyz';
         $charactersLength = strlen($characters);
         $randomString = '';
         for ($i = 0; $i < $length; $i++) {
@@ -326,41 +326,54 @@ class EDDMootaBankTransfer {
 
         $bank = array_pop($bank);
 
+        $sql2 = "SELECT meta_value as news_code from {$wpdb->edd_ordermeta} where meta_key='news_code' and edd_order_id='{$order_id}'";
+
+        $result2 = $wpdb->get_row($sql2);
+
         ?>
             <div class="space-y-3">
                 <h3>
                     Transfer
                 </h3>
                 <div class="p-3 border border-gray-200">
-                    <figure>
-                        <img src="<?php echo $bank->icon; ?>" alt="">
-                    </figure>
-                    <div class="flex flex-col gap-1 text-sm">
-                        <div>
-                            Transfer ke Bank <strong><?php echo $bank->label; ?></strong>
-                        </div>
-                        <div class="font-semibold">
-                            <?php echo $bank->account_number; ?> a.n <?php echo $bank->atas_nama; ?>
-                        </div>
-                        <?php
-                        if($unique_verification == 'news'){
-                            $sql2 = "SELECT meta_value as news_code from {$wpdb->edd_ordermeta} where meta_key='news_code' and edd_order_id='{$order_id}'";
+                <?php
+                        if(array_get($moota_settings, 'payment_instruction')){
+                    ?>
 
-                            $result2 = $wpdb->get_row($sql2);
+                        <?php echo nl2br($this->replacer(array_get($moota_settings, 'payment_instruction'), [
+                            "[bank_account]" => $bank->account_number,
+                            "[unique_note]" => "<span class='px-2 py-1 bg-green-500 text-white font-bold rounded-md'> ".$result2->news_code."</span>",
+                            "[bank_name]" => $bank->label,
+                            "[bank_holder]" => $bank->atas_nama,
+                            "[check_button]" => "<button id='moota-get-mutation-button' class='text-white font-semibold px-4 py-2 bg-sky-300 rounded-lg'>Check Status Pembayaran</button>",
+                            "[bank_logo]" => "<img src='".$bank->icon."'>"
+                        ])) ?>
 
-                            ?>
+                    <?php } else { ?>
+
+                        <figure>
+                            <img src="<?php echo $bank->icon; ?>" alt="">
+                        </figure>
+                        <div class="flex flex-col gap-1 text-sm">
                             <div>
-                                Masukan kode <span class="px-2 py-1 bg-green-500 text-white font-bold rounded-md"> <?php echo $result2->news_code ?></span> didalam berita transfer untuk transaksi otomatis!
+                                Transfer ke Bank <strong><?php echo $bank->label; ?></strong>
                             </div>
-                        <?php
-                            }
-                        ?>
-                    </div>
-                    <div class="py-2">
-                        <button id="moota-get-mutation-button" class="text-white font-semibold px-4 py-2 bg-sky-300 rounded-lg">
-                            Check Status Pembayaran
-                        </button>
-                    </div>
+                            <div class="font-semibold">
+                                <?php echo $bank->account_number; ?> a.n <?php echo $bank->atas_nama; ?>
+                            </div>
+                            <?php if($result2->news_code){ ?>
+                                <div>
+                                    Masukan kode <span class="px-2 py-1 bg-green-500 text-white font-bold rounded-md"> <?php echo $result2->news_code ?></span> didalam berita transfer untuk transaksi otomatis!
+                                </div>
+                            <?php } ?>
+                        </div>
+                        <div class="py-2">
+                            <button id="moota-get-mutation-button" class="text-white font-semibold px-4 py-2 bg-sky-300 rounded-lg">
+                                Check Status Pembayaran
+                            </button>
+                        </div>
+
+                    <?php } ?>
 
                     <script>
                         var gm_button = document.getElementById("moota-get-mutation-button");
@@ -396,6 +409,17 @@ class EDDMootaBankTransfer {
                 </div>
             </div>
         <?php
+    }
+
+    private function replacer(string $template, array $data)
+    {
+        $parsed = $template;
+
+        foreach($data as $key => $value){
+            $parsed = str_replace($key, $value, $parsed);
+        }
+
+        return $parsed;
     }
 
 }

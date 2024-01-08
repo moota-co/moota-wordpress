@@ -90,6 +90,8 @@ class MootaTransaction
 			$all_total = $item_price_sum - $unique_code;
 		}
 
+		$note_code = $with_unique_code ? (new self)->generateRandomString(5):null;
+
 		if($unique_verification == "news"){
 			$unique_code = (new self)->generateRandomString(5);
 
@@ -98,8 +100,10 @@ class MootaTransaction
 
         $order->update_meta_data( "bank_id", $channel_id );
 		$order->update_meta_data( "unique_code", $unique_code );
+		$order->update_meta_data( "note_code", $note_code );
 		$order->update_meta_data( "total", $all_total);
         $order->update_meta_data( "mutation_tag", "{$channel_id}.{$all_total}");
+		$order->update_meta_data( "mutation_note_tag", "{$channel_id}.{$note_code}");
 
 		$payment_link = self::get_return_url( $order );
 
@@ -117,7 +121,7 @@ class MootaTransaction
 	}
 
 	private function generateRandomString($length = 10) {
-        $characters = '0123456789abcdefghijklmnopqrstuvwxyz';
+        $characters = '2345678abcdefhjkmnpqrstuvwxyz';
         $charactersLength = strlen($characters);
         $randomString = '';
         for ($i = 0; $i < $length; $i++) {

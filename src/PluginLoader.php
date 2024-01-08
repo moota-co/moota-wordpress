@@ -106,79 +106,101 @@ class PluginLoader
 		/**
 		 * Defining Tabs
 		 */
-		$general_tab = $settings->add_tab(__( 'General'));
+		$general_tab = $settings->add_tab(__( 'Umum'));
 
-		$bank_tab = $settings->add_tab(__( 'Banks Available'));
+		$bank_tab = $settings->add_tab(__( 'Bank Tersedia'));
 
 		/**
 		 * Defining Sections
 		 */
-		$api_section = $general_tab->add_section('API Settings');
+		$api_section = $general_tab->add_section('Pengaturan API');
 
-		$unique_code = $general_tab->add_section("Unique Code Settings");
+		$unique_code = $general_tab->add_section("Pengaturan Pembayaran");
 
-		$merchant_section = $general_tab->add_section("Merchant Settings");
+		$merchant_section = $general_tab->add_section("Pengaturan Merchant");
 
-		$bank_section = $bank_tab->add_section('Active Bank');
+		$bank_section = $bank_tab->add_section('Aktifkan Bank');
 
 		/**
 		 * API Setting Fields
 		 */
-		$api_section->add_option('select', [
+		$api_section->add_option('checkbox', [
 			'name' => 'moota_production_mode',
-			'label' => __('Select Mode'),
-			'options' => [
-				0 => "Testing",
-				1 => "Production"
-			]
+			'label' => __('Aktifkan Mode Production')
 		]);
 
 		$api_section->add_option('text', [
 			'name' => 'moota_v2_api_key',
-			'label' => __('Moota V2 API Key')
+			'label' => __('Moota V2 API Key'),
+			"description" => "API Token Moota bisa Anda dapatkan <a href='https://app.moota.co/integrations/personal' target='_blank'>disini</a>"
 		]);
 
 		$api_section->add_option('text', [
 			'name' => 'moota_webhook_secret_key',
-			'label' => __('Webhook Secret Key')
+			'label' => __('Webhook Secret Key'),
+			"description" => "Secret token bisa Anda dapatkan <a href='https://app.moota.co/integrations/webhook' target='_blank'>disini</a>"
 		]);
 
 		/**
 		 * Unique Code Settings Fields
 		 */
+		$unique_code->add_option('text', [
+			'name' => 'moota_refresh_mutation_interval',
+			'label' => __('Interval cek status transaksi'),
+			'type' => "number",
+			'default' => 5,
+			'description' => "durasi waktu untuk check status transaksi"
+		]);
+
 		$unique_code->add_option('checkbox', [
 			"name" => "enable_moota_unique_code",
-			"label" => __('Activate Unique Code')
+			"label" => __('Aktifkan Kode Unik')
 		]);
 
 		$unique_code->add_option('text', [
 			'name' => 'moota_unique_code_start',
-			'label' => __('Moota Unique Code Start'),
-			'type' => "number"
+			'label' => __('Angka Kode Unik Dimulai'),
+			'type' => "number",
+			'description' => "Nominal minimal kode unik pembayaran"
 		]);
 
 		$unique_code->add_option('text', [
 			'name' => 'moota_unique_code_end',
-			'label' => __('Moota Unique Code End'),
-			'type' => "number"
+			'label' => __('Angka Kode Unik Berakhir'),
+			'type' => "number",
+			'description' => "Nominal maksimal kode unik pembayaran"
 		]);
 
 		$unique_code->add_option('select', [
 			'name' => 'unique_code_type',
-			'label' => __( 'Unique Code Type', 'textdomain' ),
+			'label' => __( 'Tipe Kode Unik', 'textdomain' ),
 			'options' => [
-				'increase' => 'Increase Transaction Total',
-				'decrease' => 'Decrease Transaction Total'
+				'increase' => 'Menaikan Total Transaksi',
+				'decrease' => 'Menurunkan Total Transaksi'
 			]
 		]);
 
-		$unique_code->add_option('select', [
-			'name' => 'unique_code_verification_type',
-			'label' => __( 'Unique Code Verification Type', 'textdomain' ),
-			'options' => [
-				'nominal' => 'Transaction Nominal Verification (last three digit)',
-				'news' => 'Transfer Bank News'
-			]
+		$unique_code->add_option('textarea', [
+			'name' => 'payment_instruction',
+			'label' => __( 'Instruksi Pembayaran', 'textdomain' ),
+			'description' => "
+				<div>Gunakan Replacer Berikut:</div>
+				<div>Logo Bank : <b>[bank_logo]</b> </div>
+				<div>Nama Bank : <b>[bank_name]</b> </div>
+				<div>Nomor Rekening : <b>[bank_account]</b> </div>
+				<div>Atas Nama Bank : <b>[bank_holder]</b> </div>
+				<div>Kode Unik : <b>[unique_code]</b> </div>
+				<div>Kode Unik Note (untuk berita/note transaksi) : <b>[unique_note]</b> </div>
+				<div>Tombol Check Transaksi : <b>[check_button]</b> </div>
+			",
+			"default" => "
+Harap untuk transfer sesuai dengan jumlah yang sudah ditentukan sampai 3 digit terakhir atau masukan kode [unique_note] kedalam berita / note transfer.
+
+Transfer Ke Bank [bank_name] 
+[bank_logo]
+[bank_account] A/n [bank_holder]
+			
+[check_button]"
 		]);
 
 		/**
@@ -186,7 +208,8 @@ class PluginLoader
 		 */
 		$merchant_section->add_option("text", [
 			"name" => "moota_merchant_name",
-			"label" => "Merchant Name"
+			"label" => "Nama Merchant",
+			'default' => $_SERVER['SERVER_NAME']
 		]);
 		
 		/**
@@ -215,11 +238,11 @@ class PluginLoader
 			 */
 			$wc_tab = $settings->add_tab("WooCommerce");
 
-			$wc_general_section = $wc_tab->add_section("General Settings");
+			$wc_general_section = $wc_tab->add_section("Pengaturan Umum");
 
 			$wc_general_section->add_option("select", [
 				"name" => "wc_success_status",
-				"label" => "Order Status When Paid",
+				"label" => "Status Pesanan Ketika Sudah Dibayar",
 				"options" => [
 					'processing' => "Processing",
 					"on-hold" => "On Hold",

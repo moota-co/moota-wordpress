@@ -82,7 +82,7 @@ class MootaWebhook {
 		if ( $http_signature && $_SERVER['REQUEST_METHOD'] == 'POST' ) {
 			header("HTTP/1.1 200 OK");
 
-			$response = $request->get_body();
+			$response = file_get_contents('php://input');
 
 			$moota_mode = array_get($moota_settings ?? [], 'moota_production_mode', 0);
 
@@ -90,7 +90,7 @@ class MootaWebhook {
 
 			$ip = self::get_client_ip();
 
-			$signature = hash_hmac( 'sha256', json_encode($response), $secret ?? "" );
+			$signature = hash_hmac( 'sha256', $response, $secret ?? "" );
 
 			$log      = '';
 
@@ -162,24 +162,29 @@ class MootaWebhook {
 	{
 		$moota_settings = get_option("moota_settings");
 
-		$status_paid = array_get($moota_settings, "wc_success_status", "success");
-		
-		$unique_verification = array_get($moota_settings, "unique_code_verification_type", "nominal");
+		$status_paid = array_get($moota_settings, "wc_success_status", "completed");
 
 		foreach($mutations as $mutation){
 			$bank_id = array_get($mutation, "bank_id");
 
+			$mutation = self::sanitizeUniqueNote($mutation);
+
 			global $wpdb;
 
-			$sql = "SELECT post_id 
+			$sql = "SELECT post_id as order_id
 			FROM {$wpdb->postmeta} 
 			WHERE meta_key='mutation_tag' AND meta_value='{$bank_id}.{$mutation['amount']}'";
+			
 			$meta = $wpdb->get_row($sql);
 
-			if($unique_verification == "news"){
-				$sql = "SELECT A.post_id as post_id 
-				FROM {$wpdb->postmeta} A JOIN {$wpdb->postmeta} B on A.post_id = B.post_id AND B.meta_key='unique_code' and B.meta_value='{$mutation['note']}'
-				WHERE A.meta_key='mutation_tag' AND A.meta_value='{$bank_id}.{$mutation['amount']}'";
+			if(empty($meta)){
+				$sql = "SELECT A.post_id as order_id 
+				FROM {$wpdb->postmeta} A JOIN {$wpdb->postmeta} B on A.post_id = B.post_id AND B.meta_key='note_code' and B.meta_value='{$mutation['unique_note']}',
+				wp_wc_orders C
+				WHERE A.meta_key='mutation_note_tag'
+				AND C.id = A.post_id
+                AND C.status = 'wc-on-hold' 
+				AND A.meta_value='{$bank_id}.{$mutation['unique_note']}'";
 
 
 				$meta = $wpdb->get_results($sql);
@@ -188,10 +193,36 @@ class MootaWebhook {
 			}
 
 			if(empty($meta)){
+
+				$sql = "SELECT order_id 
+				FROM wp_wc_orders_meta 
+				WHERE meta_key='mutation_tag' AND meta_value='{$bank_id}.{$mutation['amount']}'";
+				
+				$meta = $wpdb->get_row($sql);
+	
+				if(empty($meta)){
+					$sql = "SELECT A.order_id as order_id 
+					FROM wp_wc_orders_meta A JOIN wp_wc_orders_meta B on A.order_id = B.order_id AND B.meta_key='note_code' and B.meta_value='{$mutation['unique_note']}',
+					wp_wc_orders C
+					WHERE A.meta_key='mutation_note_tag'
+					AND C.id = A.order_id
+					AND C.status = 'wc-on-hold' 
+					AND A.meta_value='{$bank_id}.{$mutation['unique_note']}'";
+	
+	
+					$meta = $wpdb->get_results($sql);
+	
+					$meta = array_pop($meta);
+				}
+
+			}
+
+
+			if(empty($meta)){
 				return;
 			}
 
-			$order = new \WC_Order( $meta->post_id );
+			$order = new \WC_Order( $meta->order_id );
 
 			if ( $order->get_order_number() ) {
 
@@ -202,9 +233,9 @@ class MootaWebhook {
 					"meta_value" => "{$bank_id}.{$mutation['amount']}"
 				]);
 					
-				// (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachTransactionId($mutation['mutation_id'], $order->id);
-				// (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachPlatform($mutation['mutation_id'], "WooCommerce");
-				// (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachMerchant($mutation['mutation_id'], array_get($moota_settings, "moota_merchant_name"));
+				(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachTransactionId($mutation['mutation_id'], (string)$meta->order_id);
+				(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachPlatform($mutation['mutation_id'], "WooCommerce");
+				(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachMerchant($mutation['mutation_id'], array_get($moota_settings, "moota_merchant_name"));
 			}
 
 		}
@@ -229,7 +260,7 @@ class MootaWebhook {
 
 			$query = $wpdb->get_row($sql);
 			
-			if($unique_verification == "news"){
+			if(empty($query)){
 				$sql = "SELECT B.id as order_id 
 				FROM {$wpdb->edd_ordermeta} A JOIN {$wpdb->edd_ordermeta} C on A.edd_order_id = C.edd_order_id AND C.meta_key='news_code' and C.meta_value='{$mutation['note']}',
 				{$wpdb->edd_orders} B 
@@ -284,16 +315,40 @@ class MootaWebhook {
 						'transaction_id'    =>  (int) $mutation['id']
 					));
 
-					// (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachTransactionId($mutation['mutation_id'], $query->order_id);
-					// (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachPlatform($mutation['mutation_id'], "Easy Digital Downloads");
-					// (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachMerchant($mutation['mutation_id'], array_get($moota_settings, "moota_merchant_name"));
+					(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachTransactionId($mutation['mutation_id'], (string)$query->order_id);
+					(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachPlatform($mutation['mutation_id'], "Easy Digital Downloads");
+					(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachMerchant($mutation['mutation_id'], array_get($moota_settings, "moota_merchant_name"));
 				}
 
 				wp_reset_postdata();
-
-				// }
 			}
 		}
+	}
+
+	private static function sanitizeUniqueNote($mutation) : ?array
+	{
+		if(!isset($mutation['bank']['bank_type'])){
+			return null;
+		}
+
+		if(in_array($mutation['bank']['bank_type'], ["bcaV3", "bcaGiroV2", "bcaSnap", "bcaSyariahV2"])){
+			$mutation['unique_note'] = self::bcaTypesSanitize($mutation['description'], (string)$mutation['amount']);
+		}
+
+		return $mutation;
+	}
+
+	private static function bcaTypesSanitize(string $description, string $amount) : string
+	{
+		$unique_note = "";
+
+		$exploded = explode($amount, $description);
+
+		if(isset($exploded[1])){
+			$unique_note = substr($exploded[1], 3, 5);
+		}
+
+		return $unique_note;
 	}
 
 }

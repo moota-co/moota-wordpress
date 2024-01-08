@@ -158,6 +158,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
             $kodeunik = null;
             $bank_id = null;
             $total = null;
+            $note_code = null;
 
             $moota_settings = get_option("moota_settings");
 
@@ -180,6 +181,12 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
 				  $total = $object_item['value'];
 				  break;
 				}
+
+                if ('note_code' == $object_item['key']) {
+                    $note_code = $object_item['value'];
+                    break;
+                  }
+
 			  }
 			}
 
@@ -196,14 +203,14 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
             // $payment_link = get_post_meta($order->get_id(), 'payment_link', true );
             ?>
 
-            <table class="woocommerce-table woocommerce-table--order-details shop_table order_details">
+            <table class="wc-block-order-confirmation-totals__table ">
                <tr>
                     <th scope="row">Kode Unik</th>
-                    <td><?php echo esc_attr($kodeunik); ?></td>
+                    <td class="wc-block-order-confirmation-totals__total"><?php echo wc_price($kodeunik); ?></td>
                </tr>
                <tr>
                    <th scope="row">Nominal Yang Harus Dibayar</th>
-                   <td><?php echo wc_price($total);?></td>
+                   <td class="wc-block-order-confirmation-totals__total"><?php echo wc_price($total);?></td>
                </tr>
             </table>
 
@@ -212,31 +219,48 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
                     Transfer
                 </h3>
                 <div class="p-3 border border-gray-200">
-                    <figure>
-                        <img src="<?php echo $bank->icon; ?>" alt="">
-                    </figure>
-                    <div class="flex flex-col gap-1 text-sm">
-                        <div>
-                            Transfer ke Bank <strong><?php echo $bank->label; ?></strong>
-                        </div>
-                        <div class="font-semibold">
-                            <?php echo $bank->account_number; ?> a.n <?php echo $bank->atas_nama; ?>
-                        </div>
-                        <?php
-                        if($unique_verification == 'news'){
-                            ?>
+                    <?php
+                        if(array_get($moota_settings, 'payment_instruction')){
+                    ?>
+
+                        <?php echo nl2br($this->replacer(array_get($moota_settings, 'payment_instruction'), [
+                            "[bank_account]" => $bank->account_number,
+                            "[unique_note]" => "<span class='px-2 py-1 bg-green-500 text-white font-bold rounded-md'> ".$note_code."</span>",
+                            "[bank_name]" => $bank->label,
+                            "[bank_holder]" => $bank->atas_nama,
+                            "[check_button]" => "<button id='moota-get-mutation-button' class='text-white font-semibold px-4 py-2 bg-sky-300 rounded-lg'>Check Status Pembayaran</button>",
+                            "[bank_logo]" => "<img src='".$bank->icon."'>"
+                        ])) ?>
+
+                    <?php } else { ?>
+
+                        <figure>
+                            <img src="<?php echo $bank->icon; ?>" alt="">
+                        </figure>
+                        <div class="flex flex-col gap-1 text-sm">
                             <div>
-                                Masukan kode <span class="px-2 py-1 bg-green-500 text-white font-bold rounded-md"> <?php echo $kodeunik ?></span> didalam berita transfer untuk transaksi otomatis!
+                                Transfer ke Bank <strong><?php echo $bank->label; ?></strong>
                             </div>
-                        <?php
-                            }
-                        ?>
-                    </div>
-                    <div class="py-2">
-                        <button id="moota-get-mutation-button" class="text-white font-semibold px-4 py-2 bg-sky-300 rounded-lg">
-                            Check Status Pembayaran
-                        </button>
-                    </div>
+                            <div class="font-semibold">
+                                <?php echo $bank->account_number; ?> a.n <?php echo $bank->atas_nama; ?>
+                            </div>
+                            <?php
+                            if(!empty($note_code)){
+                                ?>
+                                <div>
+                                    Atau Anda bisa memasukan kode berikut : <span class="px-2 py-1 bg-green-500 text-white font-bold rounded-md"> <?php echo $note_code ?></span> didalam berita transfer untuk transaksi otomatis!
+                                </div>
+                            <?php
+                                }
+                            ?>
+                        </div>
+                        <div class="py-2">
+                            <button id="moota-get-mutation-button" class="text-white font-semibold px-4 py-2 bg-sky-300 rounded-lg">
+                                Check Status Pembayaran
+                            </button>
+                        </div>
+
+                    <?php } ?>
 
                     <script>
                         var gm_button = document.getElementById("moota-get-mutation-button");
@@ -274,5 +298,16 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
 
             <?php
         }
+    }
+
+    private function replacer(string $template, array $data)
+    {
+        $parsed = $template;
+
+        foreach($data as $key => $value){
+            $parsed = str_replace($key, $value, $parsed);
+        }
+
+        return $parsed;
     }
 }
