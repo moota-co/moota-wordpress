@@ -23,6 +23,10 @@ class MootaPayment
 
     public function getBanks() : ?array
     {
+        if(empty($this->access_token)){
+            return null;
+        }
+
         $cache = new FilesystemAdapter;
         
         $response = MootaApi::getAccountList();
@@ -68,21 +72,37 @@ class MootaPayment
 
     public function attachTransactionId(string $mutation_id, mixed $transaction_id)
     {
+        if(empty($this->access_token)){
+            return null;
+        }
+
         MootaApi::attachMutationTag($mutation_id, [$transaction_id]);
     }
 
     public function attachMerchant(string $mutation_id, ?string $merchant)
     {
+        if(empty($this->access_token)){
+            return null;
+        }
+
         MootaApi::attachMutationTag($mutation_id, [$merchant]);
     }
 
     public function attachPlatform(string $mutation_id, ?string $platform)
     {
+        if(empty($this->access_token)){
+            return null;
+        }
+
         MootaApi::attachMutationTag($mutation_id, [$platform]);
     }
 
     public function verifyMutation(array $mutation) : bool
     {
+        if(empty($this->access_token)){
+            return false;
+        }
+
         // die(var_dump(MootaApi::getMutationList($mutation['bank_id'])->data));
 
         $mutations = MootaApi::getMutationList($mutation['bank_id']);
@@ -112,6 +132,10 @@ class MootaPayment
 
     public function refreshMutation(string $bank_id) : ?object
     {
+        if(empty($this->access_token)){
+            return null;
+        }
+
         $log_path = "refresh_mutation_{$bank_id}.log";
 
         $log = $this->getLog($log_path);
