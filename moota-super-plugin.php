@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Moota Wordpress
- * Plugin URI: https://wordpress.org/plugins/mootapay-for-woocommerce/
+ * Plugin URI: https://moota.co/plugin-wordpress/
  * Description: Platform penerima pembayaran otomatis untuk produk, jasa dan apapun.
  * Author: Moota <hi@moota.co>
  * Author URI: https://moota.co/
