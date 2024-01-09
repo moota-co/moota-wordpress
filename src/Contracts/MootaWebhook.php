@@ -237,21 +237,6 @@ class MootaWebhook {
 			AND B.total={$mutation['amount']}";
 
 			$query = $wpdb->get_row($sql);
-			
-			if(empty($query)){
-				$sql = "SELECT B.id as order_id 
-				FROM {$wpdb->edd_ordermeta} A JOIN {$wpdb->edd_ordermeta} C on A.edd_order_id = C.edd_order_id AND C.meta_key='news_code' and C.meta_value='{$mutation['note']}',
-				{$wpdb->edd_orders} B 
-				WHERE A.meta_key='bank_id'
-				AND A.meta_value='{$mutation['bank_id']}' 
-				AND B.id=A.edd_order_id 
-				AND B.status='pending' 
-				AND B.total={$mutation['amount']}";
-
-				$query = $wpdb->get_results($sql);
-
-				$query = array_pop($query);
-			}
 
 			if(empty($query)){
 				return "OK";
@@ -357,7 +342,7 @@ class MootaWebhook {
 
 		$status_paid = array_get($moota_settings, "wc_success_status", "completed");
 
-		$sql = "SELECT A.order_id as order_id, A.meta_value AS unique_note, B.subtotal AS total 
+		$sql = "SELECT A.edd_order_id as order_id, A.meta_value AS unique_note, B.subtotal AS total 
 		FROM {$wpdb->edd_ordermeta} A, {$wpdb->edd_orders} B 
 		WHERE A.meta_key = 'news_code'
 		AND B.id = A.edd_order_id
