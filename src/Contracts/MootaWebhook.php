@@ -173,8 +173,6 @@ class MootaWebhook {
 		foreach($mutations as $mutation){
 			$bank_id = array_get($mutation, "bank_id");
 
-			$mutation = self::sanitizeUniqueNote($mutation);
-
 			global $wpdb;
 
 			$sql = "SELECT post_id as order_id
