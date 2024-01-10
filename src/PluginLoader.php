@@ -5,6 +5,7 @@ use Moota\MootaSuperPlugin\Concerns\MootaPayment;
 use Moota\MootaSuperPlugin\Contracts\MootaWebhook;
 use Jeffreyvr\WPSettings\WPSettings;
 use Moota\MootaSuperPlugin\EDD\EDDMootaBankTransfer;
+use Moota\MootaSuperPlugin\Options\WebhookOption;
 use Moota\MootaSuperPlugin\Woocommerce\WCMootaBankTransfer;
 
 class PluginLoader
@@ -52,6 +53,11 @@ class PluginLoader
         add_action('wp_enqueue_scripts', [$this, 'front_end_scripts']);
 
 		MootaWebhook::init();
+
+		add_filter('wp_settings_option_type_map', function($options){
+			$options['webhook-option'] = WebhookOption::class;
+			return $options;
+		});
 
 	}
 
@@ -127,6 +133,13 @@ class PluginLoader
 		$api_section->add_option('checkbox', [
 			'name' => 'moota_production_mode',
 			'label' => __('Aktifkan Mode Production')
+		]);
+
+		$api_section->add_option('webhook-option', [
+			'name' => 'moota_webhook_endpoint',
+			'label' => __('Webhook Url'),
+			'disable' => true,
+			'default' => $_SERVER['SERVER_NAME']."/wp-json/moota-callback/webhook"
 		]);
 
 		$api_section->add_option('text', [
