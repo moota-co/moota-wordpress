@@ -9,4 +9,4 @@
 - Menambah Webhook Url di halaman settingan
 
 ## [1.0.2] - 2024/01/10
-- Menambah Webhook Url di halaman settingan
+- Fix Webhook Url di halaman settingan
