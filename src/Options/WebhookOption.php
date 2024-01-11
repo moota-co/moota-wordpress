@@ -16,7 +16,7 @@ class WebhookOption extends OptionAbstract
         </th>
         <td class="forminp forminp-text">
     
-                        <p><b>'.$_SERVER['SERVER_NAME']."/wp-json/moota-callback/webhook".'</b></p>
+                        <p><b>'.((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://") . $_SERVER['SERVER_NAME']."/wp-json/moota-callback/webhook".'</b></p>
             
                 </td>
     </tr>';
