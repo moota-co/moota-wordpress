@@ -50,7 +50,7 @@ class MootaPayment
 
     public function getPayments() : ?object
     {
-        $moota_settings = get_option("moota_settings");
+        $moota_settings = get_option("moota_settings", []);
 
         $banks = $this->getBanks();
 
@@ -161,7 +161,7 @@ class MootaPayment
             return null;
         }
 
-        $moota_settings = get_option("moota_settings");
+        $moota_settings = get_option("moota_settings", []);
 
         $log_path = "refresh_mutation_{$bank_id}.log";
 

@@ -228,7 +228,7 @@ Transfer Ke Bank [bank_name]
 		/**
 		 * Bank Setting Fields
 		 */
-		$moota_settings = !empty(get_option("moota_settings")) ? get_option("moota_settings"):[];
+		$moota_settings = !empty(get_option("moota_settings", [])) ? get_option("moota_settings", []):[];
 
 		if(array_has($moota_settings, "moota_v2_api_key")){
 			$banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getBanks();
@@ -273,7 +273,7 @@ Transfer Ke Bank [bank_name]
 
 	public function production_mode_notice()
 	{
-		$moota_settings = get_option("moota_settings");
+		$moota_settings = get_option("moota_settings", []);
 
 
 		if(array_get($moota_settings ?? [], 'moota_production_mode', 0)){

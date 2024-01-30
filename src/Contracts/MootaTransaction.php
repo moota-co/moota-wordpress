@@ -10,7 +10,7 @@ class MootaTransaction
 		global $woocommerce;
 		$order = new WC_Order( $order_id );
 
-		$moota_settings = get_option("moota_settings");
+		$moota_settings = get_option("moota_settings", []);
 
 		$unique_verification = array_get($moota_settings, "unique_code_verification_type", "nominal");
 

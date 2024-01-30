@@ -57,7 +57,7 @@ class EDDMootaBankTransfer {
      */
     public function register_gateway( $gateways ) 
     {
-        $moota_settings = get_option("moota_settings");
+        $moota_settings = get_option("moota_settings", []);
         
         $banks = (new MootaPayment(array_get($moota_settings ?? [], "moota_v2_api_key")))->getPayments();
 
@@ -163,7 +163,7 @@ class EDDMootaBankTransfer {
         }
         global $edd_options;
 
-        $moota_settings = get_option("moota_settings");
+        $moota_settings = get_option("moota_settings", []);
 
         $errors = edd_get_errors();
         
@@ -312,7 +312,7 @@ class EDDMootaBankTransfer {
 
         $result = $wpdb->get_row($sql);
 
-        $moota_settings = get_option("moota_settings");
+        $moota_settings = get_option("moota_settings", []);
 
         $unique_verification = array_get($moota_settings, "unique_code_verification_type", "nominal");
 

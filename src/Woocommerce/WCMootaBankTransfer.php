@@ -77,7 +77,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
 	private function bank_selection( $bank_id ) {
 
         if ( empty($this->all_banks) ) {
-            $moota_settings = get_option("moota_settings");
+            $moota_settings = get_option("moota_settings", []);
 
             $this->all_banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getBanks();
         }
@@ -94,7 +94,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
 	}
 
 	public function payment_fields() {
-        $moota_settings = get_option("moota_settings");
+        $moota_settings = get_option("moota_settings", []);
 
         
         $banks = (new MootaPayment(array_get($moota_settings ?? [], "moota_v2_api_key")))->getPayments();
@@ -143,7 +143,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
 
 	public function process_payment( $order_id ) {
 
-        $moota_settings = get_option("moota_settings");
+        $moota_settings = get_option("moota_settings", []);
 
         $channel_id = sanitize_text_field( $_POST['channels'] );
         $with_unique_code = array_get($moota_settings, "enable_moota_unique_code", true);
@@ -160,7 +160,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
             $total = null;
             $note_code = null;
 
-            $moota_settings = get_option("moota_settings");
+            $moota_settings = get_option("moota_settings", []);
 
             $unique_verification = array_get($moota_settings, "unique_code_verification_type", "nominal");
 			

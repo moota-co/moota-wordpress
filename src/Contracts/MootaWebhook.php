@@ -37,7 +37,7 @@ class MootaWebhook {
 			return "Bank ID is Required!";
 		}
 
-		$moota_settings = get_option("moota_settings");
+		$moota_settings = get_option("moota_settings", []);
 
 		(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->refreshMutation($request->get_param("bank_id"));
 
@@ -71,7 +71,7 @@ class MootaWebhook {
 
 		global $wp_query;
 
-		$moota_settings = get_option("moota_settings");
+		$moota_settings = get_option("moota_settings", []);
 
 		
 
@@ -160,7 +160,7 @@ class MootaWebhook {
 
 	private static function WooCommerceHandler(array $mutations)
 	{
-		$moota_settings = get_option("moota_settings");
+		$moota_settings = get_option("moota_settings", []);
 
 		$status_paid = array_get($moota_settings, "wc_success_status", "completed");
 
@@ -218,7 +218,7 @@ class MootaWebhook {
 	private static function EDDHandler(array $mutations)
 	{
 		global $wpdb;
-		$moota_settings = get_option("moota_settings");
+		$moota_settings = get_option("moota_settings", []);
 
 		$unique_verification = array_get($moota_settings, "unique_code_verification_type", "nominal");
 
@@ -291,7 +291,7 @@ class MootaWebhook {
 	private static function updateWCUniqueNote(array $mutations)
 	{
 		global $wpdb;
-		$moota_settings = get_option("moota_settings");
+		$moota_settings = get_option("moota_settings", []);
 
 		$status_paid = array_get($moota_settings, "wc_success_status", "completed");
 
@@ -338,7 +338,7 @@ class MootaWebhook {
 	private static function updateEDDUniqueNote(array $mutations)
 	{
 		global $wpdb;
-		$moota_settings = get_option("moota_settings");
+		$moota_settings = get_option("moota_settings", []);
 
 		$status_paid = array_get($moota_settings, "wc_success_status", "completed");
 
