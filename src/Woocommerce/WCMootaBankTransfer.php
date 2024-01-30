@@ -97,7 +97,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
         $moota_settings = get_option("moota_settings");
 
         
-        $banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getPayments();
+        $banks = (new MootaPayment(array_get($moota_settings ?? [], "moota_v2_api_key")))->getPayments();
         
         
 		 ?>
@@ -190,7 +190,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
 			  }
 			}
 
-            $all_banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getPayments();
+            $all_banks = (new MootaPayment(array_get($moota_settings ?? [], "moota_v2_api_key")))->getPayments();
 
             $bank = array_filter((array)$all_banks, function($v, $k) use($bank_id){
                 

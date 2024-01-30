@@ -10,3 +10,6 @@
 
 ## [1.0.2] - 2024/01/10
 - Fix Webhook Url di halaman settingan
+
+## [1.0.3] - 2024/01/10
+- Fix type error when getting payment methods

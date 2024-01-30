@@ -59,7 +59,7 @@ class EDDMootaBankTransfer {
     {
         $moota_settings = get_option("moota_settings");
         
-        $banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getPayments();
+        $banks = (new MootaPayment(array_get($moota_settings ?? [], "moota_v2_api_key")))->getPayments();
 
         foreach($banks ?? [] as $bank)
         {
@@ -316,7 +316,7 @@ class EDDMootaBankTransfer {
 
         $unique_verification = array_get($moota_settings, "unique_code_verification_type", "nominal");
 
-        $all_banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getPayments();
+        $all_banks = (new MootaPayment(array_get($moota_settings ?? [], "moota_v2_api_key")))->getPayments();
 
         $bank = array_filter((array)$all_banks, function($v, $k) use($result){
             
