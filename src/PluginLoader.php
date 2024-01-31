@@ -224,6 +224,13 @@ Transfer Ke Bank [bank_name]
 			"label" => "Nama Merchant",
 			'default' => $_SERVER['SERVER_NAME']
 		]);
+
+		$merchant_section->add_option("text", [
+			"name" => "wp_db_prefix",
+			"label" => "Prefix database",
+			'default' => $_SERVER['SERVER_NAME'],
+			"description" => "Hanya diisi jika perlu"
+		]);
 		
 		/**
 		 * Bank Setting Fields

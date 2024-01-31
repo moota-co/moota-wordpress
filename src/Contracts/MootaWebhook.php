@@ -164,6 +164,14 @@ class MootaWebhook {
 
 		$status_paid = array_get($moota_settings, "wc_success_status", "completed");
 
+		$db_prefix = array_get($moota_settings, "wp_db_prefix");
+
+		$backup_table = "wp_wc_orders_meta";
+
+		if($db_prefix){
+			$backup_table = $db_prefix."wc_orders_meta";
+		}
+
 		$updatingByNote = self::updateWCUniqueNote($mutations);
 
 		if($updatingByNote){
@@ -184,7 +192,7 @@ class MootaWebhook {
 			if(empty($meta)){
 
 				$sql = "SELECT order_id 
-				FROM wp_wc_orders_meta 
+				FROM {$backup_table} 
 				WHERE meta_key='mutation_tag' AND meta_value='{$bank_id}.{$mutation['amount']}'";
 				
 				$meta = $wpdb->get_row($sql);
@@ -293,10 +301,21 @@ class MootaWebhook {
 		global $wpdb;
 		$moota_settings = get_option("moota_settings", []);
 
+		$db_prefix = array_get($moota_settings, "wp_db_prefix");
+
+		$backup_table = "wp_wc_orders_meta";
+
+		$backup_order_table = "wp_wc_orders";
+
+		if($db_prefix){
+			$backup_table = $db_prefix."wc_orders_meta";
+			$backup_order_table = $db_prefix."wc_orders";
+		}
+
 		$status_paid = array_get($moota_settings, "wc_success_status", "completed");
 
 		$sql = "SELECT A.order_id as order_id, A.meta_value AS unique_note, B.total_amount AS total 
-		FROM wp_wc_orders_meta A, wp_wc_orders B 
+		FROM {$backup_table} A, {$backup_order_table} B 
 		WHERE A.meta_key = 'note_code'
 		AND B.id = A.order_id
 		AND B.status = 'wc-on-hold'";

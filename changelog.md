@@ -16,3 +16,6 @@
 
 ## [1.0.4] - 2024/01/30
 - Fix Moota settings not loaded and return boolean type
+
+## [1.0.5] - 2024/01/31
+- Add WP DB prefix setting
