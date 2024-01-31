@@ -5,7 +5,7 @@
  * Description: Platform penerima pembayaran otomatis untuk produk, jasa dan apapun.
  * Author: Moota <hi@moota.co>
  * Author URI: https://moota.co/
- * Version: 1.0.5
+ * Version: 1.0.6
  * Requires at least: 6.0.0
  * Requires PHP: 7.4
  * Tested up to: 6.0.2
