@@ -80,7 +80,6 @@ class MootaWebhook {
 		
 
 		if ( $http_signature && $_SERVER['REQUEST_METHOD'] == 'POST' ) {
-			header("HTTP/1.1 200 OK");
 
 			$response = file_get_contents('php://input');
 
@@ -94,7 +93,7 @@ class MootaWebhook {
 
 			$log      = '';
 
-			if ( !$moota_mode || (hash_equals( $http_signature, $signature ) && $ip == "103.236.201.178") ) {
+			if ( !$moota_mode || (hash_equals( $http_signature, $signature ) && in_array($ip, ["103.236.201.178", "103.28.52.182"])) ) {
 
 				foreach(json_decode($response, true) as $mutation)
 				{
@@ -116,14 +115,11 @@ class MootaWebhook {
 				
 
 			} else {
-				$log = 'Invalid Signature';
+				$log = "Invalid Signature, IP : {$ip}";
 
-				return "Invalid Signature or IP!";
+				return "Invalid Signature or IP! Your IP : {$ip}";
 			}
 
-			if ( ! empty( $log ) ) {
-				self::addLog( $log );
-			}
 
 			return "OK";
 		}

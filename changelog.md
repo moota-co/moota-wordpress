@@ -22,3 +22,6 @@
 
 ## [1.0.6] - 2024/01/31
 - Remove default value for db prefix
+
+## [1.0.7] - 2024/01/31
+- Add Moota webhook IP debugging
