@@ -74,11 +74,11 @@ class MootaTransaction
 			$end_unique_code += 10;
 		}
 
-        $item_price_sum = 0;
+        $item_price_sum = $order->get_total();
 
-        foreach($items as $item){
-            $item_price_sum += $item['price'];
-        }
+        // foreach($items as $item){
+        //     $item_price_sum += $item['price'];
+        // }
 
         $unique_code = $with_unique_code ? rand($start_unique_code, $end_unique_code):0;
 

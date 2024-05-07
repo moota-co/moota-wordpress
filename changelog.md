@@ -25,3 +25,6 @@
 
 ## [1.0.7] - 2024/02/15
 - Add Moota webhook IP debugging
+
+## [1.0.8] - 2024/02/15
+- Fix WooCommerce discount bug
