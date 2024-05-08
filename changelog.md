@@ -31,3 +31,6 @@
 
 ## [1.0.9] - 2024/05/07
 - Fix EDD installation issue error
+
+## [1.0.10] - 2024/05/07
+- Fix EDD installation access token type error

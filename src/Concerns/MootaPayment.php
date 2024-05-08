@@ -14,7 +14,7 @@ class MootaPayment
 {
     private ?string $access_token = null;
 
-    public function __construct(string $access_token)
+    public function __construct(?string $access_token = null)
     {
         Config::$ACCESS_TOKEN = $access_token;
         
