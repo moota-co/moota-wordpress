@@ -35,9 +35,14 @@ class EDDMootaBankTransfer {
      */
     public function __construct()
     {
+        $moota_settings = get_option("moota_settings", []);
+
         add_filter( 'edd_currencies', array( $this, 'add_currency' ) );
         add_filter( 'edd_currency_symbol', array( $this, 'add_currency_symbol' ), 1, 2 );
-        add_filter( 'edd_payment_gateways', array( $this, 'register_gateway' ), 1, 1 );
+
+        if(array_get($moota_settings ?? [], "moota_v2_api_key")){
+            add_filter( 'edd_payment_gateways', array( $this, 'register_gateway' ), 1, 1 );
+        }
 
         if (is_admin()) {
             add_filter( 'edd_settings_sections_emails', array( $this, 'register_emails_section' ) );

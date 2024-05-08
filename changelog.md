@@ -34,3 +34,6 @@
 
 ## [1.0.10] - 2024/05/07
 - Fix EDD installation access token type error
+
+## [1.0.11] - 2024/05/07
+- Fix EDD bug when registering payment method
