@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class MootaPayment
 {
-    private string $access_token;
+    private ?string $access_token = null;
 
     public function __construct(string $access_token)
     {

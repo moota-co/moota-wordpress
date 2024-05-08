@@ -28,3 +28,6 @@
 
 ## [1.0.8] - 2024/02/15
 - Fix WooCommerce discount bug
+
+## [1.0.9] - 2024/05/07
+- Fix EDD installation issue error
