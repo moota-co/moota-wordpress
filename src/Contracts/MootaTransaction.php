@@ -107,6 +107,10 @@ class MootaTransaction
 		
 		try {
 			$item_fee = new \WC_Order_Item_Fee();
+			
+			if(array_get($moota_settings, "unique_code_type", "increase") == "decrease"){
+				$unique_code = $unique_code * -1;
+			}
 
 			$item_fee->set_name( "Kode Unik" ); // Generic fee name
 			$item_fee->set_amount( $unique_code ); // Fee amount

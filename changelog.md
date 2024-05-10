@@ -40,3 +40,6 @@
 
 ## [1.0.12] - 2024/05/10
 - Fix Woocommerce bug unique code doesn't included to order item
+
+## [1.0.13] - 2024/05/10
+- Fix Woocommerce bug when decreasing unique code
