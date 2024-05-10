@@ -37,3 +37,6 @@
 
 ## [1.0.11] - 2024/05/07
 - Fix EDD bug when registering payment method
+
+## [1.0.12] - 2024/05/10
+- Fix Woocommerce bug unique code doesn't included to order item

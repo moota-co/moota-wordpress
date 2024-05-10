@@ -104,6 +104,29 @@ class MootaTransaction
 		$order->update_meta_data( "total", $all_total);
         $order->update_meta_data( "mutation_tag", "{$channel_id}.{$all_total}");
 		$order->update_meta_data( "mutation_note_tag", "{$channel_id}.{$note_code}");
+		
+		try {
+			$item_fee = new \WC_Order_Item_Fee();
+
+			$item_fee->set_name( "Kode Unik" ); // Generic fee name
+			$item_fee->set_amount( $unique_code ); // Fee amount
+			$item_fee->set_tax_class( '' ); // default for ''
+			$item_fee->set_tax_status( 'none' ); // or 'none'
+			$item_fee->set_total( $unique_code ); // Fee amount
+
+	// 		// Calculating Fee taxes
+	// 		$item_fee->calculate_taxes( $calculate_tax_for );
+
+			// Add Fee item to the order
+			$order->add_item( $item_fee );
+
+			## ----------------------------------------------- ##
+
+			$order->calculate_totals();
+		} catch(\Exception $e){
+			// do nothing
+		}
+		
 
 		$payment_link = self::get_return_url( $order );
 

@@ -203,7 +203,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
             // $payment_link = get_post_meta($order->get_id(), 'payment_link', true );
             ?>
 
-            <table class="wc-block-order-confirmation-totals__table ">
+<!--             <table class="wc-block-order-confirmation-totals__table ">
                <tr>
                     <th scope="row">Kode Unik</th>
                     <td class="wc-block-order-confirmation-totals__total"><?php echo wc_price($kodeunik); ?></td>
@@ -212,7 +212,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
                    <th scope="row">Nominal Yang Harus Dibayar</th>
                    <td class="wc-block-order-confirmation-totals__total"><?php echo wc_price($total);?></td>
                </tr>
-            </table>
+            </table> -->
 
             <div class="space-y-3 py-3">
                 <h3>
