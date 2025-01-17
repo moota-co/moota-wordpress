@@ -125,7 +125,9 @@ class PluginLoader
 
 		$merchant_section = $general_tab->add_section("Pengaturan Merchant");
 
-		$bank_section = $bank_tab->add_section('Aktifkan Bank');
+		$bank_section = $bank_tab->add_section('List Channels');
+
+		$virtual_section = $bank_tab->add_section('Virtual Account');
 
 		/**
 		 * API Setting Fields
@@ -239,11 +241,24 @@ Transfer Ke Bank [bank_name]
 		if(array_has($moota_settings, "moota_v2_api_key")){
 			$banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getBanks();
 
-			foreach($banks ?? [] as $bank){
-				$bank_section->add_option('checkbox', [
-					'name' => $bank->bank_id,
-					'label' => "{$bank->label} - {$bank->atas_nama}/{$bank->account_number}"
-				]);
+			foreach ($banks ?? [] as $bank) {
+				$bank_type = $bank->available_channels;
+				$virtualAccountAdded = false; // Flag untuk melacak penambahan
+			
+				foreach ($bank_type ?? [] as $type) {
+					if ($type->type === 'virtual-account' && !$virtualAccountAdded) {
+						$virtual_section->add_option('checkbox', [
+							'name' => $type->name,
+							'label' => "{$type->name}"
+						]);
+						$virtualAccountAdded = true; // Set flag menjadi true setelah menambahkan
+					} elseif ($type->type === 'bank-transfer') {
+						$bank_section->add_option('checkbox', [
+							'name' => $bank->bank_id,
+							'label' => "{$bank->bank_type} - {$bank->atas_nama}/{$bank->account_number}"
+						]);
+					}
+				}
 			}
 
 		}

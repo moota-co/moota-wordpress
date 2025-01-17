@@ -1,16 +1,41 @@
 <?php
 
 namespace Moota\MootaSuperPlugin\Contracts;
+use Moota\Moota\Data\CreateTransactionData;
+use Moota\Moota\Data\CustomerData;
+use Moota\Moota\MootaApi;
 use Moota\MootaSuperPlugin\Concerns\MootaPayment;
 use WC_Order;
+use WC_Customer;
 
 class MootaTransaction
 {
     public static function request( $order_id, $channel_id, $with_unique_code, $start_unique_code, $end_unique_code, $payment_method_type = 'bank_transfer') {
 		global $woocommerce;
 		$order = new WC_Order( $order_id );
-
 		$moota_settings = get_option("moota_settings", []);
+		
+		$banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getBanks();
+		
+		$account = array_filter($banks, function($bank) use ($channel_id) {
+			return $bank->bank_id == $channel_id;
+		});
+
+		$exploded = explode(".", $channel_id);
+
+		if(str_contains($channel_id, ".")){
+			
+			$account = array_filter($banks, function($bank) use ($exploded) {
+				return $bank->bank_id == $exploded[0];
+			});
+		}
+
+		
+
+		foreach($account as $f_account)
+		{
+			$account = $f_account;
+		}
 
 		$unique_verification = array_get($moota_settings, "unique_code_verification_type", "nominal");
 
@@ -34,8 +59,7 @@ class MootaTransaction
 				'name'      => $item->get_name(),
 				'qty'       => $item->get_quantity(),
 				'price'     => $product->get_price() * $item->get_quantity(),
-				'sku'       => $product->get_sku() ?? "product",
-				'image_url' => $image_url
+				'sku'       => $product->get_sku() ?? "product"
 			];
 		}
 
@@ -64,6 +88,35 @@ class MootaTransaction
 				'sku'       => 'taxes-cost',
 				'image_url' => ''
 			];
+		}
+
+		if($account->bank_type == "winpay" || $account->bank_type == "winpayProduction"){
+			$customer = CustomerData::create(
+				$order->get_billing_first_name() . " " .$order->get_billing_last_name(),
+				$order->get_billing_email(),
+				$order->get_billing_phone()
+			);
+
+			$create_transaction = CreateTransactionData::create(
+				$order_id,
+				$exploded[0], 
+				(count($exploded) == 2) ? $exploded[1]:$exploded[0],
+				$customer,
+				$items,
+				null,
+				null,
+				null,
+				$order->get_total()
+			);
+
+			$order->update_meta_data( "bank_id", $channel_id );
+			
+			$transaction = MootaApi::createTransaction($create_transaction);
+
+			return array(
+				'result'   => 'success',
+				'redirect' => $transaction->data->payment_url
+			);
 		}
 
 		if ( strlen( $start_unique_code ) < 2 ) {

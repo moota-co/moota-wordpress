@@ -2,7 +2,9 @@
 
 namespace Moota\MootaSuperPlugin\Concerns;
 use Moota\Moota\Config;
+use Moota\Moota\Data\CreateTransactionData;
 use Moota\Moota\MootaApi;
+use Moota\Moota\Data\CustomerData;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -68,6 +70,15 @@ class MootaPayment
         
 
         return (object)$payments;
+    }
+
+    public function createTransaction(CreateTransactionData $transactionData)
+    {
+    if(empty($this->access_token)){
+        return null;
+    }
+
+    return MootaApi::createTransaction($transactionData);
     }
 
     public function createTag(string $name)

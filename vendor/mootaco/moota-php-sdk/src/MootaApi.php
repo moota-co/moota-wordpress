@@ -2,6 +2,8 @@
 
 namespace Moota\Moota;
 
+use Moota\Moota\Data\CreateTransactionData;
+
 class MootaApi
 {
     private static MootaApi $instance;
@@ -65,22 +67,12 @@ class MootaApi
         );
     }
 
-    public static function getTag() : ?object
-    {
-        return ApiRequester::get(
-            Config::BASE_URL . Config::ENDPOINT_TAGGING_INDEX,
-            Config::$ACCESS_TOKEN
-        );
-    }
-
-    public static function createTag(string $name) : ?object
+    public static function createTransaction(CreateTransactionData $data) : ?object
     {
         return ApiRequester::post(
-            Config::BASE_URL . Config::ENDPOINT_TAGGING_INDEX,
+            Config::BASE_URL . Config::ENDPOINT_CREATE_TRANSACTION,
             Config::$ACCESS_TOKEN,
-            [
-                "name" => $name
-            ]
+            CreateTransactionData::transform()
         );
     }
 

@@ -53,7 +53,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
                 'title'         => 'Method Title',
                 'type'          => 'text',
                 'description'   => 'This controls the payment method title',
-                'default'       => 'Moota Bank Transfer',
+                'default'       => 'Moota Payments',
                 'desc_tip'      => true,
             ),
             'description' => array(
@@ -78,7 +78,6 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
 
         if ( empty($this->all_banks) ) {
             $moota_settings = get_option("moota_settings", []);
-
             $this->all_banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getBanks();
         }
 
@@ -99,28 +98,53 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
         
         $banks = (new MootaPayment(array_get($moota_settings ?? [], "moota_v2_api_key")))->getPayments();
         
-        
 		 ?>
 		 <ul>
 		 <?php if ( ! empty( $banks ) ) :
              foreach ( $banks as $item ) :
                     $bank_selection = $this->bank_selection( $item->bank_id );
+                    
                     // die(json_encode($bank_selection));
+                    if($bank_selection->bank_type != 'winpay' && $bank_selection->bank_type != "winpayProduction") {
                  ?>
+                 <h3>Bank Transfer - Moota</h3> <br>
                  <li>
-                     <label for="bank-transfer-<?php echo esc_attr($bank_selection->label); ?>-bank-id-<?php echo esc_attr($item->bank_id); ?>" class="flex gap-3 items-center">
-                        <input id="bank-transfer-<?php echo esc_attr($bank_selection->label); ?>-bank-id-<?php echo esc_attr($item->bank_id); ?>" name="channels" type="radio"
+                     <label for="bank-transfer-<?php echo esc_attr($bank_selection->bank_type); ?>-bank-id-<?php echo esc_attr($item->bank_id); ?>" class="flex gap-3 items-center">
+                        <input id="bank-transfer-<?php echo esc_attr($bank_selection->bank_type); ?>-bank-id-<?php echo esc_attr($item->bank_id); ?>" name="channels" type="radio"
                         value="<?php echo esc_attr($item->bank_id); ?>">
                         <span>
-                            <img src="<?php echo esc_attr($bank_selection->icon);?>" alt="<?php echo esc_attr($bank_selection->label); ?>">
+                            <img src="<?php echo esc_attr($bank_selection->icon);?>" alt="<?php echo esc_attr($bank_selection->bank_type); ?>">
                         </span>
                         <span class="moota-bank-account">
-                            <?php echo esc_attr($bank_selection->label); ?> <?php echo esc_attr($bank_selection->account_number); ?> An. (<?php echo esc_attr($bank_selection->atas_nama); ?>)
+                            <?php echo esc_attr($bank_selection->bank_type); ?> <?php echo esc_attr($bank_selection->account_number); ?> An. (<?php echo esc_attr($bank_selection->atas_nama); ?>)
                         </span>
                      </label>
                  </li>
-             <?php endforeach;
-         endif; ?>
+             <?php } else {
+                ?>
+                <h3>Virtual Account - Moota</h3> <br>
+                <?php
+                    foreach($bank_selection->available_channels as $channel){
+                
+                ?>
+                    <li>
+                        <label for="virtual-account-winpay" class="flex gap-3 items-center">
+                            <input id="bank-transfer-<?php echo esc_attr($bank_selection->bank_type); ?>-bank-id-<?php echo esc_attr($item->bank_id); ?>-channel-id-<?php echo esc_attr($channel->channel_id); ?>" name="channels" type="radio"
+                            value="<?php echo esc_attr($item->bank_id.".".$channel->channel_id); ?>">
+                            <span>
+                                <img src="<?php echo esc_attr($channel->icon);?>" alt="<?php echo esc_attr($channel->name); ?>">
+                            </span>
+                            <span class="moota-bank-account">
+                                <?php echo esc_attr($channel->name); ?>)
+                            </span>
+                        </label>
+                    </li>
+                <?php
+                }
+              }
+            endforeach;
+        endif;
+             ?>
 		 </ul>
 		 <?php
 		 $description = $this->get_description();
@@ -129,7 +153,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
          }
 
         // wc_add_notice( \_\_('Payment error:', 'woothemes') . $error_message, 'error' );
-	}
+        }
 
 	public function validate_fields():bool {
 		if ( empty( $_POST['channels'] ) ) {
@@ -226,7 +250,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
                         <?php echo nl2br($this->replacer(array_get($moota_settings, 'payment_instruction'), [
                             "[bank_account]" => $bank->account_number,
                             "[unique_note]" => "<span class='px-2 py-1 bg-green-500 text-white font-bold rounded-md'> ".$note_code."</span>",
-                            "[bank_name]" => $bank->label,
+                            "[bank_name]" => $bank->bank_type,
                             "[bank_holder]" => $bank->atas_nama,
                             "[check_button]" => "<button id='moota-get-mutation-button' class='text-white font-semibold px-4 py-2 bg-sky-300 rounded-lg'>Check Status Pembayaran</button>",
                             "[bank_logo]" => "<img src='".$bank->icon."'>"
@@ -239,7 +263,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
                         </figure>
                         <div class="flex flex-col gap-1 text-sm">
                             <div>
-                                Transfer ke Bank <strong><?php echo $bank->label; ?></strong>
+                                Transfer ke Bank <strong><?php echo $bank->bank_type; ?></strong>
                             </div>
                             <div class="font-semibold">
                                 <?php echo $bank->account_number; ?> a.n <?php echo $bank->atas_nama; ?>
