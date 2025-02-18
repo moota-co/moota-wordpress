@@ -14,7 +14,6 @@ class CreateTransactionData {
     public static int $total;
     public static ?int $expired_in_minutes;
 
-
     private function __construct(
         string $order_id,
         string $bank_account_id,

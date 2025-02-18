@@ -130,12 +130,6 @@ class MootaTransaction
 					'price'     => $product->get_price() * $item->get_quantity() + $item_fees,
 					'sku'       => $product->get_sku() ?? "product",
 				];
-	
-				$order->update_meta_data( "bank_id", $channel_id );
-				$order->update_meta_data("total", $all_total);
-				$order->update_meta_data("items", $items);
-				$order->update_meta_data("admin_fee", $item_fees);
-				$order->save();
 				
 				$create_transaction = CreateTransactionData::create(
 					$order_id,
@@ -152,7 +146,16 @@ class MootaTransaction
 
 				$transaction = MootaApi::createTransaction($create_transaction);
 
-				$order->update_meta_data("redirect", $transaction->payment_url);
+				error_log(print_r($transaction, true));
+
+				$order->update_meta_data( "bank_id", $channel_id );
+				$order->update_meta_data("total", $all_total);
+				$order->update_meta_data("items", $items);
+				$order->update_meta_data("admin_fee", $item_fees);
+				$order->update_meta_data("redirect", $transaction->data->payment_url);
+				$order->update_meta_data("va_number", $transaction->data->account_number);
+				$order->update_meta_data('expire_at', $transaction->data->expired_at);
+				$order->save();
 				
 				$woocommerce->cart->empty_cart();
 	

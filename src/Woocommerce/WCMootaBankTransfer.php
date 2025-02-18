@@ -176,10 +176,12 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
 						<tbody class="accounts">
                         <?php
                         $i = -1;
+                        $hasBankAccounts = false;
                         if (!empty($account_option)) {
                             foreach ($account_option as $account) {
                             $i++;
                             if (!preg_match('/va$/i', $account->bank_type) && $account->bank_type != 'winpayProduction') {
+                                $hasBankAccounts = true;
                             ?>
                             <tr class="account">
                             <td class="sort"></td>
@@ -232,6 +234,9 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
                                     }
                                 }
                             }
+                            if (!$hasBankAccounts) {
+                                echo '<tr><td colspan="7" style="text-align: center; padding: 20px;">Anda belum memiliki Akun VA apapun.</td></tr>';
+                            }
                             ?>
 						</tbody>
 					</table>
@@ -244,7 +249,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
                     <div style="display: flex; align-items: baseline; border-left: 3px solid #007cba; padding-left: 12px; margin: 10px 0;">
                         <p style="font-weight: 700; margin: 0 12px 0 0; min-width: 70px; color: #000;">Contoh :</p>
                         <span style="color: #50575e; font-size: 14px; line-height: 1.5;">
-                            BCA Bank Transfer - PT. XXXX, BNI - Example Official Store
+                            BCA Bank Transfer - PT. XXXX, BNI - Example Official Store <br> Default : BANK_NAME - Bank Transfer
                         </span>
                     </div>
 				</div>
@@ -334,15 +339,13 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
 
 	public function payment_fields() {
         $moota_settings = get_option("moota_list_banks", []);
-        // var_dump($moota_settings);
-        //     die();
         ?>
 		 <ul>
              <?php if (!empty($moota_settings)) : ?>
                 <h3>Moota Bank Transfer</h3> <br>
                 <?php foreach ($moota_settings as $item) : 
                 $bank_selection = $this->bank_selection($item['bank_id']);
-                if ($bank_selection['enable_bank'] == "yes") : ?>
+                if ($bank_selection['enable_bank'] == "yes" && !preg_match('/va$/i', $item['bank_type'])) : ?>
                     <li style="display: flex; align-items: center;">
                         <label for="bank-transfer-<?php echo esc_attr($bank_selection['bank_type']); ?>-bank-id-<?php echo esc_attr($item['bank_id']); ?>" class="flex gap-3 items-center">
                             <input id="bank-transfer-<?php echo esc_attr($bank_selection['bank_type']); ?>-bank-id-<?php echo esc_attr($item['bank_id']); ?>" name="channels" type="radio"
@@ -355,6 +358,10 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
                     </li>
                 <?php endif; 
             endforeach; ?>
+            <?php else : ?>
+                <li style="text-align: center; padding: 20px;">
+                    <span class="moota-bank-account">Tidak ada akun Bank yang tersedia.</span>
+                </li>
         <?php endif; ?>
     </ul>
 		 <?php

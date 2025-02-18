@@ -207,14 +207,15 @@ class PluginLoader
             // Panggil API getBanks()
             $moota = new MootaPayment($api_key);
             $banks = $moota->getBanks();
+			$bankArray = json_decode(json_encode($banks), true);
             
             // Simpan data bank
-            update_option('moota_list_banks', $banks);
-            update_option('moota_list_accounts', $banks);
+            update_option('moota_list_banks', $bankArray);
+            update_option('moota_list_accounts', $bankArray);
             update_option('moota_last_sync', current_time('mysql', true));
             
             wp_send_json_success([
-                'message' => 'Data bank berhasil disinkronisasi! ' . count($banks) . ' Bank aktif ditemukan dalam akun ini.',
+                'message' => 'Data bank berhasil disinkronisasi! ' . count($banks) . ' Akun aktif ditemukan dalam key ini.',
                 'time' => $this->get_last_sync_time()
             ]);
         } catch(Exception $e) {
