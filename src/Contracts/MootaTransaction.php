@@ -1,0 +1,276 @@
+<?php
+
+namespace Moota\MootaSuperPlugin\Contracts;
+use Exception;
+use Moota\Moota\Data\CreateTransactionData;
+use Moota\Moota\Data\CustomerData;
+use Moota\Moota\MootaApi;
+use Moota\MootaSuperPlugin\Concerns\MootaPayment;
+use WC_Order;
+use WC_Customer;
+
+class MootaTransaction
+{
+    public static function request( $order_id, $channel_id, $with_unique_code, $with_admin_fee, $admin_fee_amount, $start_unique_code, $end_unique_code, $payment_method_type = 'bank_transfer') {
+		try {
+			
+			global $woocommerce;
+			$order = new WC_Order( $order_id );
+			$moota_settings = get_option("moota_settings", []);
+			$bank_settings 	= get_option("woocommerce_wc-super-moota-bank-transfer_settings", []);
+			
+			$banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getBanks();
+			
+			$account = array_filter($banks, function($bank) use ($channel_id) {
+				return $bank->bank_id == $channel_id;
+			});
+	
+			$exploded = [$channel_id];
+	
+			if(str_contains($channel_id, ".")){
+				$exploded = explode(".", $channel_id);
+				
+				$account = array_filter($banks, function($bank) use ($exploded) {
+					return $bank->bank_id == $exploded[0];
+				});
+			}
+	
+			foreach($account as $f_account)
+			{
+				$account = $f_account;
+			}
+	
+			$unique_verification = array_get($moota_settings, "unique_code_verification_type", "nominal");
+	
+			$items = [];
+			/**
+			 * @var $item WC_Order_Item_Product
+			 */
+			foreach ( $order->get_items() as $item ) {
+				$product = wc_get_product( $item->get_product_id() );
+	
+				$image_meta = wp_get_attachment_metadata( $item->get_product_id() );
+				$image_file = get_attached_file( $item->get_product_id(), false );
+	
+				$image_url = empty( $image_meta['original_image'] ) ? $image_file : path_join( dirname( $image_file ), $image_meta['original_image'] );
+	
+				if(empty($image_url)){
+					$image_url = get_the_post_thumbnail_url( $item->get_product_id() );
+				}
+	
+			}
+	
+			if ( $order->get_shipping_total() ) {
+				$items[] = [
+					'name'      => 'Ongkos Kirim',
+					'qty'       => 1,
+					'price'     => $order->get_shipping_total(),
+					'sku'       => 'shipping-cost',
+					'image_url' => ''
+				];
+			}
+	
+			$tax = 0;
+	
+			if ( $order->get_tax_totals() ) {
+				foreach ( $order->get_tax_totals() as $i ) {
+					$tax += $i->amount;
+				}
+				$items[] = [
+					'name'      => 'Pajak',
+					'qty'       => 1,
+					'price'     => $tax,
+					'sku'       => 'taxes-cost',
+					'image_url' => ''
+				];
+			}
+	
+			if(preg_match('/va$/i', $account->bank_type)){
+				$customer = CustomerData::create(
+					$order->get_billing_first_name() . " " .$order->get_billing_last_name(),
+					$order->get_billing_email(),
+					$order->get_billing_phone()
+				);
+				
+				try {
+					$item_fee = new \WC_Order_Item_Fee();
+					
+					if($with_admin_fee == 'percent') {
+						$item_fees = ($order->get_total() * $admin_fee_amount) / 100;
+					}
+
+					if($with_admin_fee == 'fixed') {
+						$item_fees = (float) $admin_fee_amount;
+					}
+
+					$all_total = $order->get_total() + $item_fees;
+		
+					$item_fee->set_name( "Biaya Admin" ); // Generic fee name
+					$item_fee->set_amount( $item_fees ); // Fee amount
+					$item_fee->set_tax_class( '' ); // default for ''
+					$item_fee->set_tax_status( 'none' ); // or 'none'
+					$item_fee->set_total( $item_fees ); // Fee amount
+		
+			// 		// Calculating Fee taxes
+			// 		$item_fee->calculate_taxes( $calculate_tax_for );
+		
+					// Add Fee item to the order
+					$order->add_item( $item_fee );
+		
+					## ----------------------------------------------- ##
+		
+					$order->calculate_totals();
+				} catch(Exception $e){
+					// do nothing
+				}
+
+				$items[] = [
+					'name'      => $item->get_name(),
+					'qty'       => $item->get_quantity(),
+					'price'     => $product->get_price() * $item->get_quantity() + $item_fees,
+					'sku'       => $product->get_sku() ?? "product",
+				];
+	
+				$order->update_meta_data( "bank_id", $channel_id );
+				$order->update_meta_data("total", $all_total);
+				$order->update_meta_data("items", $items);
+				$order->update_meta_data("admin_fee", $item_fees);
+				$order->save();
+				
+				$create_transaction = CreateTransactionData::create(
+					$order_id,
+					$exploded[0], 
+					(count($exploded) == 2) ? $exploded[1]:$exploded[0],
+					$customer,
+					$items,
+					null,
+					null,
+					null,
+					$all_total,
+					get_option('woocommerce_hold_stock_minutes', [])
+					);
+
+				$transaction = MootaApi::createTransaction($create_transaction);
+
+				$order->update_meta_data("redirect", $transaction->payment_url);
+				
+				$woocommerce->cart->empty_cart();
+	
+				return array(
+					'result'   => 'success',
+					'redirect' => self::get_return_url( $order )
+				);
+			}
+			
+			$end_unique_code = (int)$end_unique_code;
+
+			if ( strlen( $start_unique_code ) < 2 ) {
+				$start_unique_code = (int)sprintf( '%02d', $start_unique_code );
+			}
+	
+			if ( $start_unique_code > $end_unique_code ) {
+				$end_unique_code += 10;
+			}
+	
+			$item_price_sum = $order->get_total();
+	
+			// foreach($items as $item){
+			//     $item_price_sum += $item['price'];
+			// }
+
+			if($with_unique_code === "yes"){
+				$unique_code = rand($start_unique_code, $end_unique_code);
+			} else {
+				$unique_code = 0;
+			}
+	
+			if(array_get($bank_settings, "unique_code_type", "increase") == "increase"){
+				$all_total = $item_price_sum + $unique_code;
+			}
+	
+			if(array_get($bank_settings, "unique_code_type", "increase") == "decrease"){
+				$all_total = $item_price_sum - $unique_code;
+			}
+	
+			$note_code = $with_unique_code ? (new self)->generateRandomString(5):null;
+	
+			if($unique_verification == "news"){
+				$unique_code = (new self)->generateRandomString(5);
+	
+				$all_total = $item_price_sum;
+			}
+	
+			$order->update_meta_data( "bank_id", $channel_id );
+			$order->update_meta_data( "unique_code", $unique_code );
+			$order->update_meta_data( "note_code", $note_code );
+			$order->update_meta_data( "total", $all_total);
+			$order->update_meta_data( "mutation_tag", "{$channel_id}.{$all_total}");
+			$order->update_meta_data( "mutation_note_tag", "{$channel_id}.{$note_code}");
+			
+			try {
+				$item_fee = new \WC_Order_Item_Fee();
+				
+				if(array_get($bank_settings, "unique_code_type", "increase") == "decrease"){
+					$unique_code = $unique_code * -1;
+				}
+	
+				$item_fee->set_name( "Kode Unik" ); // Generic fee name
+				$item_fee->set_amount( $unique_code ); // Fee amount
+				$item_fee->set_tax_class( '' ); // default for ''
+				$item_fee->set_tax_status( 'none' ); // or 'none'
+				$item_fee->set_total( $unique_code ); // Fee amount
+	
+		// 		// Calculating Fee taxes
+		// 		$item_fee->calculate_taxes( $calculate_tax_for );
+	
+				// Add Fee item to the order
+				$order->add_item( $item_fee );
+	
+				## ----------------------------------------------- ##
+	
+				$order->calculate_totals();
+			} catch(Exception $e){
+				// do nothing
+			}
+			
+	
+			$payment_link = self::get_return_url( $order );
+	
+			// Mark as on-hold (we're awaiting the cheque)
+			$order->update_status( 'pending', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+	
+			// Remove cart
+			$woocommerce->cart->empty_cart();
+	
+			// Return thankyou redirect
+			return array(
+				'result'   => 'success',
+				'redirect' => $payment_link
+			);
+		} catch (Exception $e) {
+			echo 'Caught exception: ',  $e->getMessage(), "\n";
+		}
+	}
+
+	private function generateRandomString($length = 10) {
+        $characters = '2345678abcdefhjkmnpqrstuvwxyz';
+        $charactersLength = strlen($characters);
+        $randomString = '';
+        for ($i = 0; $i < $length; $i++) {
+            $randomString .= $characters[random_int(0, $charactersLength - 1)];
+        }
+        return $randomString;
+    }
+
+	public static function get_return_url( $order ) {
+		if ( $order ) {
+			$return_url = $order->get_checkout_order_received_url();
+		} else {
+			$return_url = wc_get_endpoint_url( 'order-received', '', wc_get_checkout_url() );
+		}
+
+		return apply_filters( 'woocommerce_get_return_url', $return_url, $order );
+	}
+
+
+}
