@@ -180,7 +180,7 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
                         if (!empty($account_option)) {
                             foreach ($account_option as $account) {
                             $i++;
-                            if (!preg_match('/va$/i', $account->bank_type) && $account->bank_type != 'winpayProduction') {
+                            if (!preg_match('/va$/i', $account->bank_type) && $account->bank_type != 'winpayProduction' && $account->bank_type != 'offline' ) {
                                 $hasBankAccounts = true;
                             ?>
                             <tr class="account">
@@ -324,7 +324,6 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
 
         if ( empty($this->all_banks) ) {
             $moota_settings     = get_option("moota_list_banks", []);
-            // $this->all_banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getBanks();
         }
 
         if ( ! empty($moota_settings) ) {
@@ -410,22 +409,22 @@ class WCMootaBankTransfer extends WC_Payment_Gateway
 			foreach ($order->get_meta_data() as $object) {
 			  $object_array = array_values((array)$object);
 			  foreach ($object_array as $object_item) {
-				if ('bank_id' == $object_item['key']) {
+				if ('moota_bank_id' == $object_item['key']) {
 				  $bank_id = $object_item['value'];
 				  break;
 				}
 				  
-				if ('unique_code' == $object_item['key']) {
+				if ('moota_unique_code' == $object_item['key']) {
 				  $kodeunik = $object_item['value'];
 				  break;
 				}
 				 
-				if ('total' == $object_item['key']) {
+				if ('moota_total' == $object_item['key']) {
 				  $total = $object_item['value'];
 				  break;
 				}
 
-                if ('note_code' == $object_item['key']) {
+                if ('moota_note_code' == $object_item['key']) {
                     $note_code = $object_item['value'];
                     break;
                   }

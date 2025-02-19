@@ -530,23 +530,18 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
             foreach ($order->get_meta_data() as $object) {
                 $object_array = array_values((array)$object);
                 foreach ($object_array as $object_item) {
-                    if ('bank_id' == $object_item['key']) {
+                    if ('moota_bank_id' == $object_item['key']) {
                         $bank_id = $object_item['value'];
                         break;
                     }
 
-                    if ('admin_fee' == $object_item['key']) {
+                    if ('moota_admin_fee' == $object_item['key']) {
                         $kodeunik = $object_item['value'];
                         break;
                     }
 
-                    if ('total' == $object_item['key']) {
+                    if ('moota_total' == $object_item['key']) {
                         $total = $object_item['value'];
-                        break;
-                    }
-
-                    if ('note_code' == $object_item['key']) {
-                        $note_code = $object_item['value'];
                         break;
                     }
                 }
@@ -558,7 +553,7 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
 
             $bank = array_pop($bank);
 
-            $expiredAt = $order->get_meta('expire_at');
+            $expiredAt = $order->get_meta('moota_expire_at');
             $dateTime  = new DateTime($expiredAt);
             $dateTime->setTimezone(new DateTimeZone('Asia/Jakarta'));
             $formattedDate = $dateTime->format('d F Y - H:i');
@@ -576,7 +571,7 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
                             "[bank_name]" => $bank['bank_label'],
                             "[bank_holder]" => $bank['username'],
                             "[bank_logo]" => "<img src='" . $bank['icon'] . "'>",
-                            "[account_number]" => $order->get_meta('va_number'),
+                            "[account_number]" => $order->get_meta('moota_va_number'),
                             "[expire_at]" => $formattedDate
                         ]));
                         ?>

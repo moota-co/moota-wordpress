@@ -11,7 +11,7 @@ class Config
      * @access_token
      */
 
-    public static string $ACCESS_TOKEN ;
+    public static string $ACCESS_TOKEN;
 
     /**
      * Target Url Moota v2

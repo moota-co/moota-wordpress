@@ -5,7 +5,6 @@ use Exception;
 use Moota\Moota\Data\CreateTransactionData;
 use Moota\Moota\Data\CustomerData;
 use Moota\Moota\MootaApi;
-use Moota\MootaSuperPlugin\Concerns\MootaPayment;
 use WC_Order;
 use WC_Customer;
 
@@ -17,30 +16,20 @@ class MootaTransaction
 			global $woocommerce;
 			$order = new WC_Order( $order_id );
 			$moota_settings = get_option("moota_settings", []);
+			$account_lists	= get_option("moota_list_accounts", []);
 			$bank_settings 	= get_option("woocommerce_wc-super-moota-bank-transfer_settings", []);
 			
-			$banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getBanks();
-			
-			$account = array_filter($banks, function($bank) use ($channel_id) {
-				return $bank->bank_id == $channel_id;
+			$account = array_filter($account_lists, function($bank) use ($channel_id) {
+				return $bank['bank_id'] == $channel_id;
 			});
-	
-			$exploded = [$channel_id];
-	
-			if(str_contains($channel_id, ".")){
-				$exploded = explode(".", $channel_id);
-				
-				$account = array_filter($banks, function($bank) use ($exploded) {
-					return $bank->bank_id == $exploded[0];
-				});
-			}
-	
+
+			// Jika $account adalah array multidimensi (seperti contoh di var_dump)
+			$accountObject = !empty($account) ? (object) reset($account) : null;
+
 			foreach($account as $f_account)
 			{
 				$account = $f_account;
 			}
-	
-			$unique_verification = array_get($moota_settings, "unique_code_verification_type", "nominal");
 	
 			$items = [];
 			/**
@@ -85,7 +74,7 @@ class MootaTransaction
 				];
 			}
 	
-			if(preg_match('/va$/i', $account->bank_type)){
+			if(preg_match('/va$/i', $accountObject->bank_type)){
 				$customer = CustomerData::create(
 					$order->get_billing_first_name() . " " .$order->get_billing_last_name(),
 					$order->get_billing_email(),
@@ -133,8 +122,8 @@ class MootaTransaction
 				
 				$create_transaction = CreateTransactionData::create(
 					$order_id,
-					$exploded[0], 
-					(count($exploded) == 2) ? $exploded[1]:$exploded[0],
+					$account['bank_id'], 
+					$account['bank_type'],
 					$customer,
 					$items,
 					null,
@@ -148,13 +137,13 @@ class MootaTransaction
 
 				error_log(print_r($transaction, true));
 
-				$order->update_meta_data( "bank_id", $channel_id );
-				$order->update_meta_data("total", $all_total);
-				$order->update_meta_data("items", $items);
-				$order->update_meta_data("admin_fee", $item_fees);
-				$order->update_meta_data("redirect", $transaction->data->payment_url);
-				$order->update_meta_data("va_number", $transaction->data->account_number);
-				$order->update_meta_data('expire_at', $transaction->data->expired_at);
+				$order->update_meta_data( "moota_bank_id", $channel_id );
+				$order->update_meta_data("moota_total", $all_total);
+				$order->update_meta_data("moota_items", $items);
+				$order->update_meta_data("moota_admin_fee", $item_fees);
+				$order->update_meta_data("moota_redirect", $transaction->data->payment_url);
+				$order->update_meta_data("moota_va_number", $transaction->data->account_number);
+				$order->update_meta_data('moota_expire_at', $transaction->data->expired_at);
 				$order->save();
 				
 				$woocommerce->cart->empty_cart();
@@ -197,18 +186,12 @@ class MootaTransaction
 	
 			$note_code = $with_unique_code ? (new self)->generateRandomString(5):null;
 	
-			if($unique_verification == "news"){
-				$unique_code = (new self)->generateRandomString(5);
-	
-				$all_total = $item_price_sum;
-			}
-	
-			$order->update_meta_data( "bank_id", $channel_id );
-			$order->update_meta_data( "unique_code", $unique_code );
-			$order->update_meta_data( "note_code", $note_code );
-			$order->update_meta_data( "total", $all_total);
-			$order->update_meta_data( "mutation_tag", "{$channel_id}.{$all_total}");
-			$order->update_meta_data( "mutation_note_tag", "{$channel_id}.{$note_code}");
+			$order->update_meta_data( "moota_bank_id", $channel_id );
+			$order->update_meta_data( "moota_unique_code", $unique_code );
+			$order->update_meta_data( "moota_note_code", $note_code );
+			$order->update_meta_data( "moota_total", $all_total);
+			$order->update_meta_data( "moota_mutation_tag", "{$channel_id}.{$all_total}");
+			$order->update_meta_data( "moota_mutation_note_tag", "{$channel_id}.{$note_code}");
 			
 			try {
 				$item_fee = new \WC_Order_Item_Fee();

@@ -69,9 +69,12 @@ class MootaApi
 
     public static function createTransaction(CreateTransactionData $data) : ?object
     {
+        $settings = get_option("moota_settings", []);
+        $token    = array_get($settings, 'moota_v2_api_key', []);
+
         return ApiRequester::post(
             Config::BASE_URL . Config::ENDPOINT_CREATE_TRANSACTION,
-            Config::$ACCESS_TOKEN,
+            Config::$ACCESS_TOKEN = $token,
             CreateTransactionData::transform()
         );
     }

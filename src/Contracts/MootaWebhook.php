@@ -155,7 +155,7 @@ class MootaWebhook {
 	private static function WooCommerceHandler(array $mutations)
 	{
 		global $wpdb;
-		$moota_settings = get_option("moota", []);
+		$moota_settings = get_option("moota_settings", []);
 
 		$status_paid = array_get($moota_settings, "wc_success_status", "completed");
 
@@ -290,7 +290,7 @@ class MootaWebhook {
 	private static function updateWCUniqueNote(array $mutations)
 	{
 		global $wpdb;
-		$moota_settings = get_option("moota", []);
+		$moota_settings = get_option("moota_settings", []);
 
 		$db_prefix = $wpdb->prefix;
 

@@ -50,10 +50,10 @@ class PluginLoader
 			add_filter( 'woocommerce_payment_gateways', [ $this, 'add_moota_gateway_class' ] );
 		}
 
-		if( function_exists( 'EDD' ) ){
+		// if( function_exists( 'EDD' ) ){
 
-			EDDMootaBankTransfer::getInstance();
-		}
+		// 	EDDMootaBankTransfer::getInstance();
+		// }
 
         add_action('wp_enqueue_scripts', [$this, 'front_end_scripts']);
 
@@ -77,12 +77,6 @@ class PluginLoader
 		return $methods;
 	}
 
-	public function add_moota_edd_gateway_class($gateways) 
-	{
-		$gateways[] = EDDMootaBankTransfer::class;
-		return $gateways;
-	}
-
 	function register_edd_custom_gateway($gateways) {
 		$gateways['edd_moota_bank_transfer'] = array(
 			'admin_label'    => 'Moota Bank Transfer',
@@ -92,7 +86,6 @@ class PluginLoader
 	}
 
 	public function activation_plugins() {
-        MootaWebhook::init();
 	}
 
 	public function deactivation_plugins() {
@@ -152,6 +145,7 @@ class PluginLoader
 			<span id="moota-last-sync" style="color: #666;">
 				Terakhir update: ' . $this->get_last_sync_time() . '
 			</span>
+			<span id="moota_info_message"></span>
 			<div><span style="color:red;">Warning!</span> Anda harus setting ulang Setelan Bank & Akun Setelah sinkronisasi selesai.</div>
 			<p class="description">API Token Moota bisa Anda dapatkan <a href="https://app.moota.co/integrations/personal" target="_blank">disini</a></p>
 			'
@@ -201,7 +195,7 @@ class PluginLoader
             $api_key = array_get($moota_settings ,'moota_v2_api_key', []);
             
             if (empty($api_key)) {
-                throw new Exception('API Key belum diisi');
+                throw new Exception('API Key belum diisi!');
             }
 
             // Panggil API getBanks()
@@ -260,9 +254,13 @@ class PluginLoader
                         $('#moota-last-sync').html(
                             'Terakhir update: ' + response.data.time
                         );
-                        alert(response.data.message);
+                        $('#moota_info_message').html(
+							'<div style="color: green">' + response.data.message + '</div>'
+						);
                     } else {
-                        alert('Error: ' + response.data);
+                        $('#moota_info_message').html(
+							'<div style="color: red">' + response.data + '</div>'
+						);
                     }
                 }).always(function() {
                     $button.prop('disabled', false)
