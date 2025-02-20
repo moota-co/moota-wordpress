@@ -7,15 +7,13 @@ use DateTimeZone;
 use Exception;
 use Moota\MootaSuperPlugin\Concerns\MootaPayment;
 use Moota\MootaSuperPlugin\Contracts\MootaTransaction;
+use Moota\MootaSuperPlugin\PluginLoader;
+use Throwable;
 use WC_Payment_Gateway;
 
 class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
 {
-    public $payment_description = null;
-    public $admin_fee;
     public $all_banks = [];
-    public $list_accounts = [];
-
 
     public function __construct()
     {
@@ -31,8 +29,6 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
         $this->enabled = $this->get_option('enabled');
         $this->title = $this->get_option('title');
         $this->description = $this->get_option('description');
-        $this->payment_description = $this->get_option('payment_description');
-        $this->admin_fee = $this->get_option('admin_fee');
 
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'process_admin_options']);
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'save_list_accounts'));
@@ -95,16 +91,75 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
     {
         $account_option = get_option('moota_list_accounts', []);
         $moota_settings = get_option('moota_settings', []);
+        $token          = array_get($moota_settings, 'moota_v2_api_key', []);
+
+        if (!empty($account_option) && empty($token)) {
+            try {
+                $deleted = delete_option('moota_list_accounts');
+    
+                // Jika gagal dihapus, lempar exception
+                if (!$deleted) {
+                    throw new Exception("Opsi moota_list_accounts tidak pernah ditemukan'");
+                }
+            } catch (Throwable $e) {
+            echo "Error: Terjadi Kesalahan Teknis";
+            PluginLoader::log_to_file(
+                "Error: " . $e->getMessage() . PHP_EOL .
+                "File: " . $e->getFile() . PHP_EOL .
+                "Line: " . $e->getLine()
+            );
+            exit;
+            }
+        }
+
+        if (empty($token)) {
+            ob_start();
+            ?>
+            <tr valign="top">
+                <th scope="row" class="titledesc">
+                    <label>
+                        <?php esc_html_e('Account details:', 'woocommerce'); ?>
+                        <?php echo wp_kses_post(wc_help_tip(__('These account details will be displayed within the order thank you page and confirmation email.', 'woocommerce'))); ?>
+                    </label>
+                </th>
+                <td class="forminp" id="moota_accounts">
+                    <div class="wc_input_table_wrapper">
+                        <table class="widefat wc_input_table sortable" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th class="sort">&nbsp;</th>
+                                    <th style="width: auto;">&nbsp;</th>
+                                    <th><?php esc_html_e('Account name', 'woocommerce'); ?></th>
+                                    <th><?php esc_html_e('Channel ID', 'woocommerce'); ?></th>
+                                    <th><?php esc_html_e('Account Type', 'woocommerce'); ?></th>
+                                    <th><?php esc_html_e('Label', 'woocommerce'); ?></th>
+                                    <th><?php esc_html_e('Admin Fee', 'woocommerce'); ?></th>
+                                </tr>
+                            </thead>
+                            <tbody class="accounts">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 20px;">
+                                        API Token belum diisi. Silakan isi API Token di bagian 
+                                        <a href="<?php echo admin_url('admin.php?page=moota-settings'); ?>">
+                                            pengaturan Moota
+                                        </a> 
+                                        terlebih dahulu.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </td>
+            </tr>
+            <?php
+            return ob_get_clean();
+        }
 
         if (empty($account_option)) {
             $fetched_accounts = (new MootaPayment(array_get($moota_settings ?? [], "moota_v2_api_key")))->getBanks();
-            try {
                 update_option('moota_list_accounts', $fetched_accounts);
                 wp_redirect(add_query_arg());
                 exit;
-            } catch (Exception $e) {
-                error_log("Gak jalan bro: " . $e->getMessage());
-            }
         }
 
         $account_option = array_map(function ($item) {
@@ -439,51 +494,96 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
         return [];
     }
 
-    public function payment_fields()
-    {
-        $moota_settings = get_option("moota_list_accounts", []);
-        $hasActiveVa = false;
-        ?>
-        <ul>
-            <h3>Moota Virtual Account</h3> <br>
-            <?php 
-            if (!empty($moota_settings)) {
-                foreach ($moota_settings as $item) {
-                    $bank_selection = $this->bank_selection($item['bank_id']);
-                    if (
-                        $bank_selection['enable_account'] == "yes" 
-                        && preg_match('/va$/i', $item['bank_type'])
-                    ) {
-                        $hasActiveVa = true;
-                        ?>
-                        <li style="display: flex; align-items: center;">
-                            <label for="bank-transfer-<?php echo esc_attr($bank_selection['bank_type']); ?>-bank-id-<?php echo esc_attr($item['bank_id']); ?>" class="flex gap-3 items-center">
-                                <input id="bank-transfer-<?php echo esc_attr($bank_selection['bank_type']); ?>-bank-id-<?php echo esc_attr($item['bank_id']); ?>" name="channels" type="radio"
-                                    value="<?php echo esc_attr($item['bank_id']); ?>">
-                                <img src="<?= $bank_selection['icon']; ?>">
-                                <span class="moota-bank-account">
-                                    <?php echo esc_attr($bank_selection['bank_label']); ?>
-                                </span>
-                            </label>
-                        </li>
-                        <?php
+    public function payment_fields() {
+        try {
+            $moota_settings = get_option("moota_list_accounts", []);
+            $hasActiveVa = false;
+            ?>
+            <ul>
+                <h3>Moota Virtual Account</h3> <br>
+                <?php 
+                if (!empty($moota_settings) && is_array($moota_settings)) {
+                    foreach ($moota_settings as $item) {
+                        try {
+                            // Validasi struktur data item
+                            if (!isset($item['bank_id'], $item['bank_type'])) {
+                                throw new Exception('Struktur data bank tidak valid');
+                            }
+    
+                            $bank_selection = $this->bank_selection($item['bank_id']);
+                            
+                            // Validasi struktur bank_selection
+                            $enable_account = $bank_selection['enable_account'] ?? 'no';
+                            $bank_type = $item['bank_type'] ?? '';
+                            $icon = $bank_selection['icon'] ?? '';
+                            $bank_label = $bank_selection['bank_label'] ?? 'Virtual Account';
+    
+                            if (
+                                $enable_account === "yes" 
+                                && preg_match('/va$/i', $bank_type)
+                            ) {
+                                $hasActiveVa = true;
+                                ?>
+                                <li style="display: flex; align-items: center;">
+                                    <label for="bank-transfer-<?= esc_attr($bank_type) ?>-bank-id-<?= esc_attr($item['bank_id']) ?>" 
+                                        class="flex gap-3 items-center">
+                                        
+                                        <input 
+                                            id="bank-transfer-<?= esc_attr($bank_type) ?>-bank-id-<?= esc_attr($item['bank_id']) ?>" 
+                                            name="channels" 
+                                            type="radio"
+                                            value="<?= esc_attr($item['bank_id']) ?>"
+                                        >
+                                        
+                                        <?php if (!empty($icon)) : ?>
+                                            <img src="<?= esc_url($icon) ?>" 
+                                                alt="<?= esc_attr($bank_label) ?>"
+                                                style="max-width: 40px; height: auto;">
+                                        <?php endif; ?>
+                                        
+                                        <span class="moota-bank-account">
+                                            <?= esc_html($bank_label) ?>
+                                        </span>
+                                    </label>
+                                </li>
+                                <?php
+                            }
+                        } catch (Throwable $e) {
+                            // Log error untuk item ini dan lanjutkan ke item berikutnya
+                            PluginLoader::log_to_file(
+                                "VA Payment Field Error - Bank ID {$item['bank_id']}: " . 
+                                $e->getMessage() . PHP_EOL .
+                                "File: " . $e->getFile() . PHP_EOL .
+                                "Line: " . $e->getLine()
+                            );
+                            continue;
+                        }
                     }
                 }
-            }
+                
+                if (!$hasActiveVa) : ?>
+                    <li style="text-align: center; padding: 20px;">
+                        <span class="moota-bank-account">Tidak ada akun VA yang tersedia.</span>
+                    </li>
+                <?php endif; ?>
+            </ul>
+            <?php
             
-            if (!$hasActiveVa) {
-                ?>
-                <li style="text-align: center; padding: 20px;">
-                    <span class="moota-bank-account">Tidak ada akun VA yang tersedia.</span>
-                </li>
-                <?php
+            $description = $this->get_description();
+            if ($description) {
+                echo wp_kses_post($description);
             }
-            ?>
-        </ul>
-        <?php
-        $description = $this->get_description();
-        if ($description) {
-            echo esc_attr($description);
+    
+        } catch (Throwable $e) {
+            // Handle error utama
+            PluginLoader::log_to_file(
+                "Payment Fields Fatal Error: " . $e->getMessage() . PHP_EOL .
+                "File: " . $e->getFile() . PHP_EOL .
+                "Line: " . $e->getLine()
+            );
+            
+            // Tampilkan pesan error umum
+            echo '<div class="moota-error-notice">Sistem pembayaran sedang mengalami gangguan. Silakan coba lagi nanti.</div>';
         }
     }
 
@@ -518,11 +618,9 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
 
     public function order_details($order)
     {
+
         if ($order->get_payment_method() == $this->id) {
-            $biaya_admin = null;
             $bank_id = null;
-            $total = null;
-            $note_code = null;
 
             $instruction = get_option("woocommerce_wc-super-moota-virtual-transfer_settings", []);
             $moota_settings = get_option("moota_list_accounts", []);
@@ -532,16 +630,6 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
                 foreach ($object_array as $object_item) {
                     if ('moota_bank_id' == $object_item['key']) {
                         $bank_id = $object_item['value'];
-                        break;
-                    }
-
-                    if ('moota_admin_fee' == $object_item['key']) {
-                        $kodeunik = $object_item['value'];
-                        break;
-                    }
-
-                    if ('moota_total' == $object_item['key']) {
-                        $total = $object_item['value'];
                         break;
                     }
                 }
@@ -635,15 +723,13 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
                             location.reload();
                         }
 
-
                         gm_button.addEventListener("click", () => postData("/wp-json/internal/get-mutation-now", {
                             bank_id: "<?php echo esc_attr($bank['bank_id']); ?>"
                         }));
                     </script>
                 </div>
             </div>
-
-<?php
+        <?php
         }
     }
 

@@ -5,6 +5,8 @@ use Exception;
 use Moota\Moota\Data\CreateTransactionData;
 use Moota\Moota\Data\CustomerData;
 use Moota\Moota\MootaApi;
+use Moota\MootaSuperPlugin\PluginLoader;
+use Throwable;
 use WC_Order;
 use WC_Customer;
 
@@ -82,6 +84,7 @@ class MootaTransaction
 				);
 				
 				try {
+
 					$item_fee = new \WC_Order_Item_Fee();
 					
 					if($with_admin_fee == 'percent') {
@@ -100,17 +103,20 @@ class MootaTransaction
 					$item_fee->set_tax_status( 'none' ); // or 'none'
 					$item_fee->set_total( $item_fees ); // Fee amount
 		
-			// 		// Calculating Fee taxes
-			// 		$item_fee->calculate_taxes( $calculate_tax_for );
-		
 					// Add Fee item to the order
 					$order->add_item( $item_fee );
 		
 					## ----------------------------------------------- ##
 		
 					$order->calculate_totals();
-				} catch(Exception $e){
-					// do nothing
+				} catch (Throwable $e) {
+					// Log error untuk item ini dan lanjutkan ke item berikutnya
+					PluginLoader::log_to_file(
+						"VA Payment Field Error - Bank ID {$item['bank_id']}: " . 
+						$e->getMessage() . PHP_EOL .
+						"File: " . $e->getFile() . PHP_EOL .
+						"Line: " . $e->getLine()
+					);
 				}
 
 				$items[] = [
@@ -123,19 +129,17 @@ class MootaTransaction
 				$create_transaction = CreateTransactionData::create(
 					$order_id,
 					$account['bank_id'], 
-					$account['bank_type'],
 					$customer,
 					$items,
-					null,
-					null,
-					null,
 					$all_total,
+					$account['bank_type'],
+					null,
+					null,
+					null,
 					get_option('woocommerce_hold_stock_minutes', [])
 					);
 
 				$transaction = MootaApi::createTransaction($create_transaction);
-
-				error_log(print_r($transaction, true));
 
 				$order->update_meta_data( "moota_bank_id", $channel_id );
 				$order->update_meta_data("moota_total", $all_total);
@@ -165,10 +169,6 @@ class MootaTransaction
 			}
 	
 			$item_price_sum = $order->get_total();
-	
-			// foreach($items as $item){
-			//     $item_price_sum += $item['price'];
-			// }
 
 			if($with_unique_code === "yes"){
 				$unique_code = rand($start_unique_code, $end_unique_code);
@@ -206,9 +206,6 @@ class MootaTransaction
 				$item_fee->set_tax_status( 'none' ); // or 'none'
 				$item_fee->set_total( $unique_code ); // Fee amount
 	
-		// 		// Calculating Fee taxes
-		// 		$item_fee->calculate_taxes( $calculate_tax_for );
-	
 				// Add Fee item to the order
 				$order->add_item( $item_fee );
 	
@@ -216,7 +213,7 @@ class MootaTransaction
 	
 				$order->calculate_totals();
 			} catch(Exception $e){
-				// do nothing
+				
 			}
 			
 	
@@ -234,7 +231,7 @@ class MootaTransaction
 				'redirect' => $payment_link
 			);
 		} catch (Exception $e) {
-			echo 'Caught exception: ',  $e->getMessage(), "\n";
+			
 		}
 	}
 
@@ -257,6 +254,5 @@ class MootaTransaction
 
 		return apply_filters( 'woocommerce_get_return_url', $return_url, $order );
 	}
-
 
 }

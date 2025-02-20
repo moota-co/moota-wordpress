@@ -7,7 +7,6 @@ use Exception;
 use Moota\MootaSuperPlugin\Concerns\MootaPayment;
 use Moota\MootaSuperPlugin\Contracts\MootaWebhook;
 use Jeffreyvr\WPSettings\WPSettings;
-use Moota\MootaSuperPlugin\EDD\EDDMootaBankTransfer;
 use Moota\MootaSuperPlugin\Options\WebhookOption;
 use Moota\MootaSuperPlugin\Woocommerce\WCMootaBankTransfer;
 use Moota\MootaSuperPlugin\Woocommerce\WCMootaVirtualAccountTransfer;
@@ -15,8 +14,6 @@ use Moota\MootaSuperPlugin\Woocommerce\WCMootaVirtualAccountTransfer;
 class PluginLoader
 {
     private static $init;
-
-	private string $plugin_name = "moota-super-plugin";
 
 	public function __construct() {
 
@@ -26,7 +23,6 @@ class PluginLoader
 		register_deactivation_hook( MOOTA_FULL_PATH, [ $this, 'deactivation_plugins' ] );
 
         register_shutdown_function(function () {
-        //    print_r( error_get_last() );
         });
 
 		add_action( 'admin_menu', [$this, 'register_setting_page'] );
@@ -50,11 +46,6 @@ class PluginLoader
 			add_filter( 'woocommerce_payment_gateways', [ $this, 'add_moota_gateway_class' ] );
 		}
 
-		// if( function_exists( 'EDD' ) ){
-
-		// 	EDDMootaBankTransfer::getInstance();
-		// }
-
         add_action('wp_enqueue_scripts', [$this, 'front_end_scripts']);
 
 		MootaWebhook::init();
@@ -77,24 +68,14 @@ class PluginLoader
 		return $methods;
 	}
 
-	function register_edd_custom_gateway($gateways) {
-		$gateways['edd_moota_bank_transfer'] = array(
-			'admin_label'    => 'Moota Bank Transfer',
-			'checkout_label' => 'Bank Transfer',
-		);
-		return $gateways;
-	}
-
 	public function activation_plugins() {
 	}
 
 	public function deactivation_plugins() {
-
 	}
 
     public function front_end_scripts() {
         $assets = plugin_dir_url( MOOTA_FULL_PATH ) . 'assets/';
-
 
         wp_enqueue_style( 'moota-payment-gateway',  $assets . 'style.css' );
 		wp_enqueue_style( 'moota-toastr',  $assets . 'css/toastr.css' );
@@ -143,7 +124,7 @@ class PluginLoader
 				data-nonce="' . wp_create_nonce('moota_sync_banks') . '"
 			><span class="dashicons dashicons-update"></span> Sinkronisasi Bank</button>
 			<span id="moota-last-sync" style="color: #666;">
-				Terakhir update: ' . $this->get_last_sync_time() . '
+				Terakhir update: ' . $this->get_last_sync_time() . ' GMT+7 (Asia/Jakarta)
 			</span>
 			<span id="moota_info_message"></span>
 			<div><span style="color:red;">Warning!</span> Anda harus setting ulang Setelan Bank & Akun Setelah sinkronisasi selesai.</div>
@@ -185,37 +166,51 @@ class PluginLoader
 	}
 
 	public function ajax_sync_banks() {
-        check_ajax_referer('moota_sync_banks', 'nonce');
-        
-        try {
-            if (!current_user_can('manage_options')) {
-                throw new Exception('Akses ditolak');
-            }
+		check_ajax_referer('moota_sync_banks', 'nonce');
+		
+		try {
+			if (!current_user_can('manage_options')) {
+				throw new Exception('Akses ditolak');
+			}
+	
 			$moota_settings = get_option('moota_settings', []);
-            $api_key = array_get($moota_settings ,'moota_v2_api_key', []);
-            
-            if (empty($api_key)) {
-                throw new Exception('API Key belum diisi!');
-            }
-
-            // Panggil API getBanks()
-            $moota = new MootaPayment($api_key);
-            $banks = $moota->getBanks();
+			$api_key = array_get($moota_settings, 'moota_v2_api_key', '');
+			
+			if (empty($api_key)) {
+				throw new Exception('API Key belum diisi!');
+			}
+	
+			// Panggil API getBanks() dan tangkap error
+			$moota = new MootaPayment($api_key);
+			$banks = $moota->getBanks();
+	
+			// Jika API mengembalikan error (misal: token invalid)
+			if (empty($banks) || isset($banks['error'])) {
+				throw new Exception(
+					$banks['error'] ?? 'Token tidak valid atau tidak ada akun apapun yang terdaftar dengan key ini.'
+				);
+			}
+	
+			// Simpan data bank
 			$bankArray = json_decode(json_encode($banks), true);
-            
-            // Simpan data bank
-            update_option('moota_list_banks', $bankArray);
-            update_option('moota_list_accounts', $bankArray);
-            update_option('moota_last_sync', current_time('mysql', true));
-            
-            wp_send_json_success([
-                'message' => 'Data bank berhasil disinkronisasi! ' . count($banks) . ' Akun aktif ditemukan dalam key ini.',
-                'time' => $this->get_last_sync_time()
-            ]);
-        } catch(Exception $e) {
-            wp_send_json_error($e->getMessage());
-        }
-    }
+			update_option('moota_list_banks', $bankArray);
+			update_option('moota_list_accounts', $bankArray);
+			update_option('moota_last_sync', current_time('mysql', true));
+			
+			wp_send_json_success([
+				'message' => 'Data bank berhasil disinkronisasi! ' . count($banks) . ' Akun aktif ditemukan dalam key ini.',
+				'time' => $this->get_last_sync_time() . ' GMT+7 (Asia/Jakarta)'
+			]);
+		} catch(Exception $e) {
+			// Hapus cache jika token invalid
+			delete_option('moota_list_banks');
+			delete_option('moota_list_accounts');
+	
+			wp_send_json_error([
+				'error' => $e->getMessage()
+			]);
+		}
+	}
 
     private function get_last_sync_time() {
         $last_sync = get_option('moota_last_sync');
@@ -259,7 +254,7 @@ class PluginLoader
 						);
                     } else {
                         $('#moota_info_message').html(
-							'<div style="color: red">' + response.data + '</div>'
+							'<div style="color: red">Error : ' + response.data.error + '</div>'
 						);
                     }
                 }).always(function() {
@@ -305,6 +300,24 @@ class PluginLoader
         </div>
 
 		<?php
+	}
+
+	public static function log_to_file($message) {
+		// Path baru: wp-content/moota-logs/
+		$log_dir = WP_CONTENT_DIR . '/moota-logs/';
+		$log_file = $log_dir . 'debug.log';
+	
+		// Buat direktori jika belum ada
+		if (!file_exists($log_dir)) {
+			mkdir($log_dir, 0755, true); // 0755 = izin direktori
+		}
+	
+		// Format pesan log
+		$timestamp = date('Y-m-d H:i:s');
+		$log_content = "[$timestamp] $message" . PHP_EOL;
+	
+		// Tulis ke file
+		file_put_contents($log_file, $log_content, FILE_APPEND);
 	}
 
 }

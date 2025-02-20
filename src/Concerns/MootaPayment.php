@@ -2,13 +2,10 @@
 
 namespace Moota\MootaSuperPlugin\Concerns;
 use Moota\Moota\Config;
-use Moota\Moota\Data\CreateTransactionData;
 use Moota\Moota\MootaApi;
-use Moota\Moota\Data\CustomerData;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception;
 use Symfony\Component\Cache\Adapter\DoctrineDbalAdapter;
-use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Contracts\Cache\ItemInterface;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -18,11 +15,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 class MootaPayment
 {
     private ?string $access_token = null;
-    private $cache;
 
     public function __construct(?string $access_token = null)
     {
-        global $wpdb;
 
         Config::$ACCESS_TOKEN = $access_token;
         
@@ -93,8 +88,7 @@ class MootaPayment
 
     } catch (Exception $e) {
         // Tangani error yang mungkin terjadi
-        error_log("Error in getBanks: " . $e->getMessage());
-        return null;
+        echo "Terjadi Error : {$e->getMessage()}";
     }
 }
 
@@ -118,15 +112,6 @@ class MootaPayment
         
 
         return (object)$payments;
-    }
-
-    public function createTransaction(CreateTransactionData $transactionData)
-    {
-    if(empty($this->access_token)){
-        return null;
-    }
-
-    return MootaApi::createTransaction($transactionData);
     }
 
     public function createTag(string $name)
@@ -161,17 +146,6 @@ class MootaPayment
         $this->createTag($transaction_id);
 
         MootaApi::attachMutationTag($mutation_id, [$transaction_id]);
-    }
-
-    public function attachMerchant(string $mutation_id, ?string $merchant)
-    {
-        if(empty($this->access_token)){
-            return null;
-        }
-
-        $this->createTag($merchant);
-
-        MootaApi::attachMutationTag($mutation_id, [$merchant]);
     }
 
     public function attachPlatform(string $mutation_id, ?string $platform)

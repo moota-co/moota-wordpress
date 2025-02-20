@@ -37,17 +37,6 @@ class MootaApi
         );
     }
 
-    public static function attachMutationNote(string $mutation_id, string $message) : ?object
-    {
-        return ApiRequester::post(
-            Config::BASE_URL . \str_replace("{mutation_id}", $mutation_id, Config::ENDPOINT_MUTATION_NOTE),
-            Config::$ACCESS_TOKEN,
-            [
-                "note" => $message
-            ]
-        );
-    }
-
     public static function attachMutationTag(string $mutation_id, array $tags) : ?object
     {
         return ApiRequester::post(
@@ -77,13 +66,5 @@ class MootaApi
             Config::$ACCESS_TOKEN = $token,
             CreateTransactionData::transform()
         );
-    }
-
-    public function __clone()
-    {
-    }
-
-    public function __wakeup()
-    {
     }
 }
