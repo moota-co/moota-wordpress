@@ -40,12 +40,12 @@ class ApiRequester
                 "Get Access Token From Moota Integrations Menu " .
                 "See https://app.moota.co/integrations/personal " .
                 "for the details or contact our support at hi@moota.co"
-            );
-        } else if (preg_match('/\s/', $access_token)) {
-            throw new Exception(
-                "access token contains space "
-            );
-        }
+            );}
+        // } else if (preg_match('/\s/', $access_token)) {
+        //     throw new Exception(
+        //         "access token contains space "
+        //     );
+        // }
 
         $curl_options = [
             CURLOPT_URL => $url,

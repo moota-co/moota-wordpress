@@ -21,10 +21,10 @@ class MootaApi
         return self::$instance;
     }
 
-    public static function getAccountList() : ?object
+    public static function getAccountList(int $page = 1) : ?object
     {
         return ApiRequester::get(
-            Config::BASE_URL . Config::ENDPOINT_BANK_INDEX,
+            Config::BASE_URL . Config::ENDPOINT_BANK_INDEX . "?page={$page}",
             Config::$ACCESS_TOKEN
         );
     }
@@ -53,6 +53,25 @@ class MootaApi
         return ApiRequester::post(
             Config::BASE_URL . \str_replace("{bank_id}", $bank_id, Config::ENDPOINT_BANK_REFRESH_MUTATION),
             Config::$ACCESS_TOKEN
+        );
+    }
+
+    public static function getTag() : ?object
+    {
+        return ApiRequester::get(
+            Config::BASE_URL . Config::ENDPOINT_TAGGING_INDEX,
+            Config::$ACCESS_TOKEN
+        );
+    }
+    
+    public static function createTag(string $name) : ?object
+    {
+        return ApiRequester::post(
+            Config::BASE_URL . Config::ENDPOINT_TAGGING_INDEX,
+            Config::$ACCESS_TOKEN,
+            [
+                "name" => $name
+            ]
         );
     }
 

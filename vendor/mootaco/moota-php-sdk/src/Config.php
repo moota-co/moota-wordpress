@@ -27,6 +27,8 @@ class Config
     const ENDPOINT_ATTATCH_TAGGING_MUTATION = '/api/v2/tagging/mutation/{mutation_id}';
     const ENDPOINT_CREATE_TRANSACTION = "/api/v2/create-transaction";
 
+    const ENDPOINT_TAGGING_INDEX = '/api/v2/tagging';
+
     public function getBaseUrl()
     {
         return self::BASE_URL;

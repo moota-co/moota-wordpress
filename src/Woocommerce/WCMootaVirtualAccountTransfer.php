@@ -19,7 +19,7 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
     {
         $this->id                 = 'wc-super-moota-virtual-transfer';
         $this->has_fields         = true;
-        $this->method_title       = 'Virtual Account Transfer';
+        $this->method_title       = 'Virtual Account Transfer (Whitelabel)';
         $this->method_description = 'Terima Pembayaran langsung ke masuk kerekening tanpa biaya per-transaksi. Mendukung Banyak Bank Nasional';
 
         $this->init_form_fields();
@@ -62,14 +62,14 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
                 'title'         => 'Customer Message',
                 'type'          => 'textarea',
                 'css'           => 'width:500px;',
-                'default'       => 'Terima Pembayaran langsung ke rekening dengan virtual account. Mendukung Banyak Bank Nasional',
+                'default'       => 'Terima Pembayaran langsung ke rekening dengan virtual account. Mendukung Banyak Bank Nasional. <p style="color: red">Warning! : </p> Menggunakan Payment Method ini mewajibkan kamu untuk menggunakan No.HP / No.Telp!',
                 'description'   => 'The message which you want it to appear to the customer in the checkout page.',
             ),
             'payment_description' => array(
                 'title'         => 'Thanks Page (Order) Message',
                 'type'          => 'textarea',
                 'css'           => 'width:500px',
-                'default'       => 'Segera Transfer dengan menggunakan Metode Pembayaran Virtual Account [bank_name] ke Nomor [account_number]. Bayar Sebelum : <p style="color:red">[expire_at]</p> Jika Masa Berlaku sudah terlewat, Maka Pesananmu akan segera dibatalkan.
+                'default'       => 'Segera Transfer dengan menggunakan Metode Pembayaran Virtual Account [bank_name] ke Nomor [account_number]. Bayar Sebelum : <p style="color:red">[expire_at] GMT+7 (Asia/Jakarta)</p>Jika Masa Berlaku sudah terlewat, Maka Pesananmu akan segera dibatalkan.
 
                 [bank_logo]',
                 'description'   => "
@@ -99,7 +99,7 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
     
                 // Jika gagal dihapus, lempar exception
                 if (!$deleted) {
-                    throw new Exception("Opsi moota_list_accounts tidak pernah ditemukan'");
+                    throw new Exception("Opsi moota_list_banks tidak pernah ditemukan'");
                 }
             } catch (Throwable $e) {
             echo "Error: Terjadi Kesalahan Teknis";
@@ -118,7 +118,7 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
             <tr valign="top">
                 <th scope="row" class="titledesc">
                     <label>
-                        <?php esc_html_e('Account details:', 'woocommerce'); ?>
+                        <?php esc_html_e('List Banks Tersedia:', 'woocommerce'); ?>
                         <?php echo wp_kses_post(wc_help_tip(__('These account details will be displayed within the order thank you page and confirmation email.', 'woocommerce'))); ?>
                     </label>
                 </th>
@@ -127,10 +127,7 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
                         <table class="widefat wc_input_table sortable" cellspacing="0">
                             <thead>
                                 <tr>
-                                    <th class="sort">&nbsp;</th>
-                                    <th style="width: auto;">&nbsp;</th>
                                     <th><?php esc_html_e('Account name', 'woocommerce'); ?></th>
-                                    <th><?php esc_html_e('Channel ID', 'woocommerce'); ?></th>
                                     <th><?php esc_html_e('Account Type', 'woocommerce'); ?></th>
                                     <th><?php esc_html_e('Label', 'woocommerce'); ?></th>
                                     <th><?php esc_html_e('Admin Fee', 'woocommerce'); ?></th>
@@ -157,9 +154,90 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
 
         if (empty($account_option)) {
             $fetched_accounts = (new MootaPayment(array_get($moota_settings ?? [], "moota_v2_api_key")))->getBanks();
+            if (!empty($fetched_accounts)) {
                 update_option('moota_list_accounts', $fetched_accounts);
                 wp_redirect(add_query_arg());
                 exit;
+            } else {
+                // Token is invalid, do not update the option
+                // Proceed to render the invalid token message
+                ob_start();
+                ?>
+                <tr valign="top">
+                    <th scope="row" class="titledesc">
+                        <label>
+                            <?php esc_html_e('List Banks Tersedia:', 'woocommerce'); ?>
+                            <?php echo wp_kses_post(wc_help_tip(__('These account details will be displayed within the order thank you page and confirmation email.', 'woocommerce'))); ?>
+                        </label>
+                    </th>
+                    <td class="forminp" id="moota_accounts">
+                        <div class="wc_input_table_wrapper">
+                            <table class="widefat wc_input_table sortable" cellspacing="0">
+                                <thead>
+                                    <tr>
+                                        <th><?php esc_html_e('Account name', 'woocommerce'); ?></th>
+                                        <th><?php esc_html_e('Account Type', 'woocommerce'); ?></th>
+                                        <th><?php esc_html_e('Label', 'woocommerce'); ?></th>
+                                        <th><?php esc_html_e('Admin Fee', 'woocommerce'); ?></th>
+                                    </tr>
+                                </thead>
+                                <tbody class="accounts">
+                                    <tr>
+                                        <td colspan="6" style="text-align: center; padding: 20px;">
+                                            Token API tidak valid. Silakan periksa kembali API Token Anda di bagian 
+                                            <a href="<?php echo admin_url('admin.php?page=moota-settings'); ?>">
+                                                pengaturan Moota
+                                            </a>.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </td>
+                </tr>
+                <?php
+                return ob_get_clean();
+            }
+        }
+
+        if (empty($account_option) && !empty($token)) {
+            ob_start();
+            ?>
+            <tr valign="top">
+                <th scope="row" class="titledesc">
+                    <label>
+                        <?php esc_html_e('List Banks Tersedia:', 'woocommerce'); ?>
+                        <?php echo wp_kses_post(wc_help_tip(__('These account details will be displayed within the order thank you page and confirmation email.', 'woocommerce'))); ?>
+                    </label>
+                </th>
+                <td class="forminp" id="moota_accounts">
+                    <div class="wc_input_table_wrapper">
+                        <table class="widefat wc_input_table sortable" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th><?php esc_html_e('Account name', 'woocommerce'); ?></th>
+                                    <th><?php esc_html_e('Account Type', 'woocommerce'); ?></th>
+                                    <th><?php esc_html_e('Label', 'woocommerce'); ?></th>
+                                    <th><?php esc_html_e('Admin Fee', 'woocommerce'); ?></th>
+                                </tr>
+                            </thead>
+                            <tbody class="accounts">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 20px;">
+                                        Tidak Ada Akun yang tersedia Dalam Key Ini. 
+                                        <a href="<?php echo admin_url('admin.php?page=moota-settings'); ?>">
+                                            pengaturan Moota
+                                        </a> 
+                                        terlebih dahulu.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </td>
+            </tr>
+            <?php
+            return ob_get_clean();
         }
 
         $account_option = array_map(function ($item) {
@@ -183,7 +261,6 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
                                 <th class="sort">&nbsp;</th>
                                 <th style="width: auto;">&nbsp;</th>
                                 <th><?php esc_html_e('Account name', 'woocommerce'); ?></th>
-                                <th><?php esc_html_e('Channel ID', 'woocommerce'); ?></th>
                                 <th><?php esc_html_e('Account Type', 'woocommerce'); ?></th>
                                 <th><?php esc_html_e('Label', 'woocommerce'); ?></th>
                                 <th><?php esc_html_e('Admin Fee', 'woocommerce'); ?></th>
@@ -202,6 +279,7 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
                                         <tr class="account">
                                             <td class="sort"></td>
                                             <td style="padding: 6px; text-align: center;">
+                                                <input type="hidden" name="moota_bank_id[<?php echo esc_attr($i); ?>]" value="<?php echo esc_attr($account->bank_id); ?>">
                                                 <input type="hidden" name="moota_bank_icon[<?php echo esc_attr($i); ?>]" value="<?php echo esc_attr(wp_unslash($account->icon)); ?>">
                                                 <input type="hidden" name="moota_enable_bank[<?php echo esc_attr($i); ?>]" value="no">
                                                 <input type="checkbox"
@@ -215,19 +293,12 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
                                                     ?> />
                                             </td>
                                             <td>
-                                                <input type="text"
-                                                    value="<?php echo esc_attr(wp_unslash($account->username)); ?>"
-                                                    name="moota_bank_name[<?php echo esc_attr($i); ?>]" readonly />
-                                            </td>
+                                                <span style="padding: 8px;" class="moota-bank-name"><?php echo esc_html($account->username); ?></span>
+                                                <input type="hidden" name="moota_bank_name[<?php echo esc_attr($i); ?>]" value="<?php echo esc_attr($account->username); ?>">
+                                            </td>                                                           
                                             <td>
-                                                <input type="text"
-                                                    value="<?php echo esc_attr($account->bank_id); ?>"
-                                                    name="moota_bank_id[<?php echo esc_attr($i); ?>]" readonly />
-                                            </td>
-                                            <td>
-                                                <input type="text"
-                                                    value="<?php echo esc_attr(wp_unslash($account->bank_type)); ?>"
-                                                    name="moota_bank_type[<?php echo esc_attr($i); ?>]" readonly />
+                                                <span style="padding: 8px;" class="moota-bank-type"><?php echo esc_html($account->bank_type); ?></span>
+                                                <input type="hidden" name="moota_bank_type[<?php echo esc_attr($i); ?>]" value="<?php echo esc_attr($account->bank_type); ?>">
                                             </td>
                                             <td>
                                                 <input type="text"
@@ -292,7 +363,7 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
                     <div style="display: flex; align-items: baseline; border-left: 3px solid #007cba; padding-left: 12px; margin: 10px 0;">
                         <p style="font-weight: 700; margin: 0 12px 0 0; min-width: 70px; color: #000;">Label :</p>
                         <span style="color: #50575e; font-size: 14px; line-height: 1.5;">
-                            Digunakan untuk Penamaan Metode Pembayaran di Halaman Order (Thanks Page).
+                            Digunakan untuk Penamaan Metode Pembayaran di Halaman Checkout/Order.
                         </span>
                     </div>
                     <div style="display: flex; align-items: baseline; border-left: 3px solid #007cba; padding-left: 12px; margin: 10px 0;">

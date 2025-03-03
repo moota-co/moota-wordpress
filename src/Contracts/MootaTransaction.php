@@ -17,7 +17,6 @@ class MootaTransaction
 			
 			global $woocommerce;
 			$order = new WC_Order( $order_id );
-			$moota_settings = get_option("moota_settings", []);
 			$account_lists	= get_option("moota_list_accounts", []);
 			$bank_settings 	= get_option("woocommerce_wc-super-moota-bank-transfer_settings", []);
 			
@@ -80,8 +79,25 @@ class MootaTransaction
 				$customer = CustomerData::create(
 					$order->get_billing_first_name() . " " .$order->get_billing_last_name(),
 					$order->get_billing_email(),
-					$order->get_billing_phone()
+					ltrim($order->get_billing_phone(), "+")
 				);
+
+				if (empty($_POST['billing_phone'])) {
+					wc_add_notice('Nomor HP wajib diisi untuk pembayaran VA', 'error');
+					return [
+						'result' => 'failure',
+						'refresh' => true
+					];
+
+				}
+
+				if ((int)WC()->cart->total < 10000) {
+					wc_add_notice('Total Pembayaran dengan Metode VA Harus Senilai Rp10.000 atau Lebih!', 'error');
+					return [
+						'result' => 'failure',
+						'refresh' => true
+					];
+				}
 				
 				try {
 
@@ -122,40 +138,89 @@ class MootaTransaction
 				$items[] = [
 					'name'      => $item->get_name(),
 					'qty'       => $item->get_quantity(),
-					'price'     => $product->get_price() * $item->get_quantity() + $item_fees,
+					'price'     => $product->get_price(),
 					'sku'       => $product->get_sku() ?? "product",
 				];
+
+				$items[] = [
+					'name'		=> "Biaya Admin",
+					'qty'		=> 1,
+					'price'		=> $item_fees ?? 0,
+					'sku'		=> "admin_tax"
+				];
 				
-				$create_transaction = CreateTransactionData::create(
-					$order_id,
-					$account['bank_id'], 
-					$customer,
-					$items,
-					$all_total,
-					$account['bank_type'],
-					null,
-					null,
-					null,
-					get_option('woocommerce_hold_stock_minutes', [])
+				try {
+					$create_transaction = CreateTransactionData::create(
+						$order_id,
+						$account['bank_id'], 
+						$customer,
+						$items,
+						$order->get_total(),
+						$account['bank_type'],
+						null,
+						null,
+						null,
+						get_option('woocommerce_hold_stock_minutes', [])
 					);
 
-				$transaction = MootaApi::createTransaction($create_transaction);
-
-				$order->update_meta_data( "moota_bank_id", $channel_id );
-				$order->update_meta_data("moota_total", $all_total);
-				$order->update_meta_data("moota_items", $items);
-				$order->update_meta_data("moota_admin_fee", $item_fees);
-				$order->update_meta_data("moota_redirect", $transaction->data->payment_url);
-				$order->update_meta_data("moota_va_number", $transaction->data->account_number);
-				$order->update_meta_data('moota_expire_at', $transaction->data->expired_at);
-				$order->save();
+					$transaction = MootaApi::createTransaction($create_transaction);
 				
-				$woocommerce->cart->empty_cart();
-	
-				return array(
-					'result'   => 'success',
-					'redirect' => self::get_return_url( $order )
-				);
+					// Cek error response
+					if (isset($transaction->errors) && $transaction->status !== 'success') {
+						$errorMessage = $transaction->message ?? 'Terjadi kesalahan validasi';
+						
+						if (!empty($transaction->errors)) {
+							foreach ($transaction->errors as $field => $messages) {
+								$errorMessage .= "\n" . implode("\n", $messages);
+							}
+						}
+						
+						throw new Exception($errorMessage);
+					}
+					MootaWebhook::addLog(
+						"Transaksi berhasil dibuat! Berikut informasi detailnya: \n" . 
+						print_r($transaction, true)
+					);
+				
+					$order->update_meta_data("moota_bank_id", $channel_id);
+					$order->update_meta_data("moota_total", $all_total);
+					$order->update_meta_data("moota_items", $items);
+					$order->update_meta_data("moota_admin_fee", $item_fees);
+					$order->update_meta_data("moota_mutation_tag", "moota_{$transaction->data->va_number}_{$all_total}");
+					$order->update_meta_data("moota_redirect", $transaction->data->payment_url);
+					$order->update_meta_data("moota_va_number", $transaction->data->va_number);
+					$order->update_meta_data('moota_expire_at', $transaction->data->expired_at);
+					$order->save();
+					
+					$woocommerce->cart->empty_cart();
+				
+					return [
+						'result'   => 'success',
+						'redirect' => self::get_return_url($order)
+					];
+				
+				} catch (Exception $e) {
+					// --- TAMBAHKAN RETURN FAILURE DI CATCH ---
+					wc_add_notice("Kolom customer phone wajib diisi jika memilih virtual account", 'error');
+					
+					error_log("Moota API Error: " . $e->getMessage());
+					PluginLoader::log_to_file(
+						"Transaction Error: " . $e->getMessage() . PHP_EOL .
+						print_r($transaction ?? null, true)
+					);
+					
+					// Mark order as failed
+					if ($order) {
+						$order->update_status('failed', $e->getMessage());
+					}
+
+					$woocommerce->cart->empty_cart();
+					
+					return [
+						'result' => 'failure',
+						'refresh' => true
+					];
+				}
 			}
 			
 			$end_unique_code = (int)$end_unique_code;
@@ -186,6 +251,7 @@ class MootaTransaction
 	
 			$note_code = $with_unique_code ? (new self)->generateRandomString(5):null;
 	
+			$order->update_meta_data('wc_total', $item_price_sum);
 			$order->update_meta_data( "moota_bank_id", $channel_id );
 			$order->update_meta_data( "moota_unique_code", $unique_code );
 			$order->update_meta_data( "moota_note_code", $note_code );

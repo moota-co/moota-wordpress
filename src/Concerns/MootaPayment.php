@@ -24,10 +24,53 @@ class MootaPayment
         $this->access_token = $access_token;
     }
 
-    public function getBanks() : ?array
+    public function clearCache(): void
+    {
+        try {
+            $db_user = DB_USER;
+            $db_password = DB_PASSWORD;
+            $db_host = DB_HOST;
+            $db_name = DB_NAME;
+
+            $connection = DriverManager::getConnection([
+            'driver' => 'pdo_mysql', // Tambahkan driver
+            'user' => $db_user,
+            'password' => $db_password,
+            'host' => $db_host,
+            'dbname' => $db_name,
+            ]); // Sama seperti di getBanks()
+            $cache = new DoctrineDbalAdapter($connection, 'cache', 0);
+
+            // Hapus cache banks dan accounts
+            $cache->deleteItem('moota-bank-account-lists');
+            $cache->deleteItem('moota-account-lists');
+
+            // Hapus juga cache token untuk memastikan data benar-benar fresh
+            $cache->deleteItem('moota_stored_access_token');
+        } catch (Exception $e) {
+            error_log("Gagal menghapus cache: " . $e->getMessage());
+        }
+    }
+
+    public function attachMerchant(string $mutation_id, ?string $merchant)
+    {
+        if(empty($this->access_token)){
+            return null;
+        }
+
+        $this->createTag($merchant);
+
+        MootaApi::attachMutationTag($mutation_id, [$merchant]);
+    }
+
+    public function getBanks(bool $forceRefresh = false) : ?array
 {
     if (empty($this->access_token)) {
         return null;
+    }
+
+    if ($forceRefresh) {
+        $this->clearCache();
     }
 
     try {
@@ -68,16 +111,30 @@ class MootaPayment
         }
 
         // Ambil data dari cache atau API
-        $response = $cache->get("moota-bank-account-lists", function(ItemInterface $item) : ?object {
-            $response = MootaApi::getAccountList();
-            $item->expiresAfter((60 * 60) * 5); // Cache kedaluwarsa setelah 5 jam
-            return $response;
+        $response = $cache->get("moota-bank-account-lists", function(ItemInterface $item) {
+            $allData = [];
+            $currentPage = 1;
+            $totalPages = 1;
+        
+            do {
+                // Ambil data per halaman
+                $response = MootaApi::getAccountList($currentPage);
+        
+                if (!isset($response->data)) break;
+        
+                // Gabungkan data dari semua halaman
+                $allData = array_merge($allData, $response->data);
+                $totalPages = $response->last_page ?? 1;
+                $currentPage++;
+            } while ($currentPage <= $totalPages);
+        
+            // Simpan semua data ke cache dalam satu entri
+            $item->expiresAfter((60 * 60) * 5);
+            return (object) [
+                'data' => $allData,
+                'total' => count($allData)
+            ];
         });
-
-        // Jika data tidak ditemukan di cache pertama, coba cache kedua
-        if (!isset($response->data)) {
-            $response = $cache->getItem("moota-account-lists")->get();
-        }
 
         // Jika data tetap tidak ditemukan, kembalikan null
         if (!isset($response->data)) {

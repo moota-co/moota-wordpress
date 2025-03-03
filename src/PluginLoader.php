@@ -7,6 +7,7 @@ use Exception;
 use Moota\MootaSuperPlugin\Concerns\MootaPayment;
 use Moota\MootaSuperPlugin\Contracts\MootaWebhook;
 use Jeffreyvr\WPSettings\WPSettings;
+use Moota\MootaSuperPlugin\EDD\EDDMootaBankTransfer;
 use Moota\MootaSuperPlugin\Options\WebhookOption;
 use Moota\MootaSuperPlugin\Woocommerce\WCMootaBankTransfer;
 use Moota\MootaSuperPlugin\Woocommerce\WCMootaVirtualAccountTransfer;
@@ -26,6 +27,7 @@ class PluginLoader
         });
 
 		add_action( 'admin_menu', [$this, 'register_setting_page'] );
+		add_action('update_option_moota_settings', [$this, 'clear_cache_on_api_key_change'], 10, 2);
 
 		add_action('admin_notices', [$this, 'production_mode_notice']);
 		add_action('wp_ajax_moota_sync_banks', [$this, 'ajax_sync_banks']);
@@ -39,6 +41,18 @@ class PluginLoader
 
 		return self::$init;
 	}
+
+	public function clear_cache_on_api_key_change($old_value, $new_value) {
+    $old_api_key = array_get($old_value, 'moota_v2_api_key');
+    $new_api_key = array_get($new_value, 'moota_v2_api_key');
+    
+    if ($old_api_key !== $new_api_key) {
+        // Hapus semua cache terkait
+        delete_option('moota_list_banks');
+        delete_option('moota_list_accounts');
+        delete_option('moota_last_sync');
+    }
+}
 
 	public function onload() {
 
@@ -54,7 +68,6 @@ class PluginLoader
 			$options['webhook-option'] = WebhookOption::class;
 			return $options;
 		});
-
 	}
 
 	/**
@@ -66,6 +79,20 @@ class PluginLoader
 		$methods[] = WCMootaBankTransfer::class;
 		$methods[] = WCMootaVirtualAccountTransfer::class;
 		return $methods;
+	}
+
+	public function add_moota_edd_gateway_class($gateways) 
+	{
+		$gateways[] = EDDMootaBankTransfer::class;
+		return $gateways;
+	}
+
+	function register_edd_custom_gateway($gateways) {
+		$gateways['edd_moota_bank_transfer'] = array(
+			'admin_label'    => 'Moota Bank Transfer',
+			'checkout_label' => 'Bank Transfer',
+		);
+		return $gateways;
 	}
 
 	public function activation_plugins() {
@@ -150,7 +177,7 @@ class PluginLoader
 			$wc_general_section = $wc_tab->add_section("Pengaturan Umum");
 
 			$wc_general_section->add_option("select", [
-				"name" => "wc_success_status",
+				"name" => "moota_wc_success_status",
 				"label" => "Status Pesanan Ketika Sudah Dibayar",
 				"options" => [
 					'processing' => "Processing",
@@ -182,7 +209,8 @@ class PluginLoader
 	
 			// Panggil API getBanks() dan tangkap error
 			$moota = new MootaPayment($api_key);
-			$banks = $moota->getBanks();
+			$moota->clearCache();
+			$banks = $moota->getBanks(true);
 	
 			// Jika API mengembalikan error (misal: token invalid)
 			if (empty($banks) || isset($banks['error'])) {
