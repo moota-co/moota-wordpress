@@ -68,4 +68,5 @@ Deleted :
 - Checkout Message Field Di Halaman Moota Settings (Dipindahkan Ke Halaman Payment Bank/Virtual Transfer Moota)
 - Thanks Order Page Field Di Halaman Moota Settings (Dipindahkan Ke Halaman Payment Bank/Virtual Transfer Moota)
 
+
 - Edd Support Soon! :D
