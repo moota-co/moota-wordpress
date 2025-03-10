@@ -40,6 +40,11 @@ class ComposerStaticInitd8146a8bcc61cec9ec52b95ee5a12827
         array (
             'Jeffreyvr\\WPSettings\\' => 21,
         ),
+        'D' => 
+        array (
+            'Doctrine\\Deprecations\\' => 22,
+            'Doctrine\\DBAL\\' => 14,
+        ),
         'A' => 
         array (
             'Adbar\\' => 6,
@@ -94,6 +99,14 @@ class ComposerStaticInitd8146a8bcc61cec9ec52b95ee5a12827
         'Jeffreyvr\\WPSettings\\' => 
         array (
             0 => __DIR__ . '/..' . '/jeffreyvanrossum/wp-settings/src',
+        ),
+        'Doctrine\\Deprecations\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/doctrine/deprecations/src',
+        ),
+        'Doctrine\\DBAL\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/doctrine/dbal/src',
         ),
         'Adbar\\' => 
         array (

@@ -10,6 +10,7 @@ class Config
      *
      * @access_token
      */
+
     public static string $ACCESS_TOKEN;
 
     /**
@@ -17,7 +18,7 @@ class Config
      *
      * @BASE_URL
      */
-    const BASE_URL = 'https://app.moota.co';
+    const BASE_URL = 'https://api.moota.co';
 
     const ENDPOINT_MUTATION_INDEX = '/api/v2/mutation';
     const ENDPOINT_MUTATION_NOTE = '/api/v2/mutation/{mutation_id}/note';
@@ -26,9 +27,10 @@ class Config
     const ENDPOINT_ATTATCH_TAGGING_MUTATION = '/api/v2/tagging/mutation/{mutation_id}';
     const ENDPOINT_CREATE_TRANSACTION = "/api/v2/create-transaction";
 
+    const ENDPOINT_TAGGING_INDEX = '/api/v2/tagging';
+
     public function getBaseUrl()
     {
         return self::BASE_URL;
     }
-
 }

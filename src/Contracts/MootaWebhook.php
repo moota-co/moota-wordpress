@@ -1,7 +1,9 @@
 <?php
 
 namespace Moota\MootaSuperPlugin\Contracts;
+use Exception;
 use Moota\MootaSuperPlugin\Concerns\MootaPayment;
+use WP_REST_Response;
 
 class MootaWebhook {
 	private static $filename = 'mutasi-log';
@@ -27,8 +29,6 @@ class MootaWebhook {
 			]);
 
 		} );
-
-		// add_action( 'template_redirect', [self::class, '_endpoint_handler'] );
 	}
 
 	public static function mutation_now_endpoint(\WP_REST_Request $request)
@@ -68,61 +68,53 @@ class MootaWebhook {
 	}
 
 	public static function _endpoint_handler(\WP_REST_Request $request) {
-
 		global $wp_query;
-
+	
 		$moota_settings = get_option("moota_settings", []);
-
-		
-
 		$http_signature = $request->get_header("Signature");
-
-		
-
-		if ( $http_signature && $_SERVER['REQUEST_METHOD'] == 'POST' ) {
-
+		$response_data = [
+			'Status'  => 'success',
+			'Message' => 'Mutasi Ditemukan! Proses Auto-Konfirm Berhasil :D'
+		];
+		$http_code = 200;
+	
+		if ($http_signature && $_SERVER['REQUEST_METHOD'] == 'POST') {
 			$response = file_get_contents('php://input');
-
+			$data = json_decode($response, true);
 			$moota_mode = array_get($moota_settings ?? [], 'moota_production_mode', 0);
-
-			$secret   = array_get($moota_settings, "moota_webhook_secret_key");
-
+			$secret = array_get($moota_settings, "moota_webhook_secret_key");
 			$ip = self::get_client_ip();
-
-			$signature = hash_hmac( 'sha256', $response, $secret ?? "" );
-
-			$log      = '';
-
-			if ( !$moota_mode || (hash_equals( $http_signature, $signature ) && in_array($ip, ["103.236.201.178", "103.28.52.182"])) ) {
-
-				foreach(json_decode($response, true) as $mutation)
-				{
-					$verify = $moota_mode ? (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->verifyMutation($mutation):true;
-
-					if(!$verify){
-						
-						return "Mutations Data Is Not Verified!";
-					}
-				}
-
-				if( class_exists("WooCommerce") ){
-					self::WooCommerceHandler(json_decode($response, true));
-				}
-
-				if(function_exists( 'EDD' )){
-					self::EDDHandler(json_decode($response, true));
-				}
-				
-
-			} else {
-				$log = "Invalid Signature, IP : {$ip}";
-
-				return "Invalid Signature or IP! Your IP : {$ip}";
+			$signature = hash_hmac('sha256', $response, $secret ?? "");
+	
+			// Pengecekan test webhook (hanya di production mode)
+			if ($moota_mode == 0 && !empty($data[0]['amount']) && $data[0]['amount'] == 10000) {
+				$response_data['Message'] = "OK (Test Webhook)";
+				return new WP_REST_Response($response_data, $http_code);
 			}
-
-
-			return "OK";
+	
+			if (!$moota_mode || (hash_equals($http_signature, $signature) && in_array($ip, ["103.236.201.178", "103.28.52.182"]))) {
+				try {
+					if (class_exists("WooCommerce")) {
+						self::WooCommerceHandler($data); // Gunakan $data yang sudah di-decode
+					}
+	
+					if (function_exists('EDD')) {
+						self::EDDHandler($data); // Gunakan $data yang sudah di-decode
+					}
+				} catch (Exception $e) {
+					$response_data['Status'] = 'failed';
+					$response_data['Message'] = $e->getMessage();
+				}
+			} else {
+				$response_data['Status'] = 'failed';
+				$response_data['Message'] = "Invalid Signature or IP! Your IP : {$ip}";
+			}
+		} else {
+			$response_data['Status'] = 'failed';
+			$response_data['Message'] = "Invalid request method or missing signature.";
 		}
+	
+		return new WP_REST_Response($response_data, $http_code);
 	}
 
 
@@ -155,69 +147,111 @@ class MootaWebhook {
 
 
 	private static function WooCommerceHandler(array $mutations)
-	{
-		$moota_settings = get_option("moota_settings", []);
+{
+    global $wpdb;
 
-		$status_paid = array_get($moota_settings, "wc_success_status", "completed");
+    self::addLog("Memulai proses WooCommerceHandler dengan " . count($mutations) . " mutasi");
 
-		$db_prefix = array_get($moota_settings, "wp_db_prefix");
-
-		$backup_table = "wp_wc_orders_meta";
-
-		if($db_prefix){
-			$backup_table = $db_prefix."wc_orders_meta";
-		}
-
-		$updatingByNote = self::updateWCUniqueNote($mutations);
-
-		if($updatingByNote){
-			return;
-		}
-
-		foreach($mutations as $mutation){
-			$bank_id = array_get($mutation, "bank_id");
-
-			global $wpdb;
-
-			$sql = "SELECT post_id as order_id
-			FROM {$wpdb->postmeta} 
-			WHERE meta_key='mutation_tag' AND meta_value='{$bank_id}.{$mutation['amount']}'";
-			
-			$meta = $wpdb->get_row($sql);
-
-			if(empty($meta)){
-
-				$sql = "SELECT order_id 
-				FROM {$backup_table} 
-				WHERE meta_key='mutation_tag' AND meta_value='{$bank_id}.{$mutation['amount']}'";
-				
-				$meta = $wpdb->get_row($sql);
-
-			}
-
-
-			if(empty($meta)){
-				return;
-			}
-
-			$order = new \WC_Order( $meta->order_id );
-
-			if ( $order->get_order_number() ) {
-
-				$order->update_status($status_paid);
-
-				$wpdb->delete($wpdb->postmeta, [
-					"meta_key" => "mutation_tag",
-					"meta_value" => "{$bank_id}.{$mutation['amount']}"
-				]);
-					
-				(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachTransactionId($mutation['mutation_id'], (string)$meta->order_id);
-				(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachPlatform($mutation['mutation_id'], "WooCommerce");
-				(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachMerchant($mutation['mutation_id'], array_get($moota_settings, "moota_merchant_name"));
-			}
-
-		}
+    $moota_settings = get_option("moota_settings", []);
+    $status_paid = array_get($moota_settings, "moota_wc_success_status", "completed");
+    
+    // Gunakan method resmi WooCommerce untuk cek HPOS
+    $hpos_enabled = get_option('woocommerce_custom_orders_table_enabled', []);
+	if($hpos_enabled === "yes") {
+		self::addLog("HPOS Aktif.");
+	} else {
+		self::addLog("Legacy Mode Aktif.");
 	}
+
+    foreach ($mutations as $mutation) {
+		$bank_id = array_get($mutation, "bank_id");
+		$amount = $mutation['amount'];
+		$bank_type = array_get($mutation, "bank.bank_type", "");
+		$order_id = null;
+	
+		// Tentukan mutation_tag berdasarkan jenis bank (VA atau non-VA)
+		if (preg_match('/va$/i', $bank_type)) {
+			// VA: mutation_tag = "moota_{va_number}_{amount}"
+			$va_number = array_get($mutation, 'account_number', '');
+			$mutation_tag = "moota_" . trim($va_number) . "_{$amount}";
+		} else {
+			// Non-VA: mutation_tag = "bank_id.amount"
+			$mutation_tag = "{$bank_id}.{$amount}";
+		}
+	
+		// Query order dengan mutation_tag
+        $order_ids = wc_get_orders([
+            'limit'        => -1,
+            'orderby'      => 'date_created',
+            'order'        => 'DESC',
+            'meta_key'     => 'moota_mutation_tag',
+            'meta_value'   => $mutation_tag,
+            'status'       => ['pending', 'on-hold'],
+            'return'       => 'ids',
+        ]);
+
+        // Batalkan proses jika ada duplikasi
+        if (count($order_ids) > 1) {
+            self::addLog("Pembatalan Auto-Konfirmasi: Duplikasi mutation_tag {$mutation_tag}");
+            self::notifyAdminAboutDuplication($mutation_tag, $order_ids);
+            continue;
+        }
+
+        // Ambil order_id jika hanya ada 1
+        $order_id = $order_ids[0] ?? null;
+		
+		if (empty($order_id)) {
+			self::addLog("Order tidak ditemukan untuk mutation_tag: {$mutation_tag}");
+			continue;
+		}
+
+		$order = wc_get_order($order_id);
+		
+		if (!$order) {
+			self::addLog("Order ID {$order_id} tidak valid");
+			continue;
+		}
+	
+		// Validasi VA Number (hanya untuk VA)
+		if (preg_match('/va$/i', $bank_type)) {
+			$va_number_in_order = $order->get_meta('moota_va_number');
+			$amount_in_order = $order->get_total();
+			
+			// Pastikan VA Number dan Amount sesuai
+			if ($va_number_in_order !== $va_number || $amount_in_order != $amount) {
+				self::addLog("VA Number/Amount tidak match: Order {$va_number_in_order}/{$amount_in_order} vs Mutation {$va_number}/{$amount}");
+				continue;
+			}
+			
+			self::addLog("VA Number valid: {$va_number}");
+		}
+	
+		// Proses pembaruan status order
+		$order->update_status($status_paid);
+		self::addLog("Status order {$order_id} diupdate ke: {$status_paid}");
+	
+		// Hapus mutation_tag dari metadata
+		$order->delete_meta_data('mutation_tag');
+		$order->save();
+		self::addLog("Mutation_tag dihapus dari order {$order_id}");
+	
+		// Lampirkan data ke Moota
+		self::addLog("Melampirkan transaction ID ke Moota: Mutation ID " . $mutation['mutation_id']);
+		(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachTransactionId($mutation['mutation_id'], (string)$order_id);
+		
+		self::addLog("Melampirkan platform ke Moota");
+		(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachPlatform($mutation['mutation_id'], "WooCommerce");
+	}
+
+	if (count($order_ids) > 1) {
+		throw new Exception("Duplikasi Order Ditemukan Sebanyak " . count($order_ids) . "! Berikut Tagnya : {$mutation_tag}, Silahkan Check Secara Manual Ya!");
+	}
+
+	if (empty($order_id)) {
+        throw new Exception("Order tidak ditemukan untuk mutation_tag: {$mutation_tag}");
+    }
+
+}
 
 	private static function EDDHandler(array $mutations)
 	{
@@ -284,7 +318,6 @@ class MootaWebhook {
 
 					(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachTransactionId($mutation['mutation_id'], (string)$query->order_id);
 					(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachPlatform($mutation['mutation_id'], "Easy Digital Downloads");
-					(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachMerchant($mutation['mutation_id'], array_get($moota_settings, "moota_merchant_name"));
 				}
 
 				wp_reset_postdata();
@@ -293,61 +326,63 @@ class MootaWebhook {
 	}
 
 	private static function updateWCUniqueNote(array $mutations)
-	{
-		global $wpdb;
-		$moota_settings = get_option("moota_settings", []);
+{
+    global $wpdb;
+    $moota_settings = get_option("moota_settings", []);
+    $hpos_enabled = get_option('woocommerce_custom_orders_table_enabled', 'no');
 
-		$db_prefix = array_get($moota_settings, "wp_db_prefix");
+    $db_prefix = $wpdb->prefix;
+    $backup_table = $db_prefix . 'wc_orders_meta';
+    $backup_order_table = $db_prefix . 'wc_orders';
 
-		$backup_table = "wp_wc_orders_meta";
+    $status_paid = array_get($moota_settings, "moota_wc_success_status", "completed");
 
-		$backup_order_table = "wp_wc_orders";
+    // Sesuaikan status berdasarkan HPOS
+    $status_condition = $hpos_enabled === 'yes' ? 'pending' : 'wc-pending';
 
-		if($db_prefix){
-			$backup_table = $db_prefix."wc_orders_meta";
-			$backup_order_table = $db_prefix."wc_orders";
-		}
+    $sql = $wpdb->prepare("
+        SELECT A.order_id as order_id, A.meta_value AS unique_note, B.total_amount AS total 
+        FROM {$backup_table} A 
+        INNER JOIN {$backup_order_table} B 
+            ON A.order_id = B.id 
+        WHERE A.meta_key = 'moota_mutation_note_tag'
+            AND B.status = %s
+    ", $status_condition);
 
-		$status_paid = array_get($moota_settings, "wc_success_status", "completed");
+    $meta = $wpdb->get_row($sql);
 
-		$sql = "SELECT A.order_id as order_id, A.meta_value AS unique_note, B.total_amount AS total 
-		FROM {$backup_table} A, {$backup_order_table} B 
-		WHERE A.meta_key = 'note_code'
-		AND B.id = A.order_id
-		AND B.status = 'wc-on-hold'";
+    if (empty($meta)) {
+        return false;
+    }
 
-		$meta = $wpdb->get_row($sql);
+    $order_founds = 0;
 
-		if(empty($meta)){
-			return false;
-		}
+    foreach ($mutations as $mutation) {
+        $note_code = strtolower(trim($meta->moota_note_code));
+        $description = strtolower(trim($mutation['description']));
 
-		$order_founds = 0;
+        if (
+            $mutation['amount'] == $meta->total 
+            && strpos($description, $note_code) !== false
+        ) {
+            $order = wc_get_order($meta->order_id);
 
-		foreach($mutations as $mutation){
+            if ($order && $order->get_order_number()) {
+                $order->update_status($status_paid);
+                
+        self::addLog("Melampirkan transaction ID ke Moota: Mutation ID " . $mutation['mutation_id']);
+            (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachTransactionId($mutation['mutation_id'], (string)$meta->order_id);
+            
+        self::addLog("Melampirkan platform ke Moota");
+            (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachPlatform($mutation['mutation_id'], "WooCommerce");
 
-			if($mutation['amount'] == $meta->total && strpos($mutation['description'], $meta->unique_note)){
+                $order_founds++;
+            }
+        }
+    }
 
-				$order = new \WC_Order( $meta->order_id );
-
-				if ( $order->get_order_number() ) {
-
-					$order->update_status($status_paid);
-						
-					(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachTransactionId($mutation['mutation_id'], (string)$meta->order_id);
-					(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachPlatform($mutation['mutation_id'], "WooCommerce");
-					(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachMerchant($mutation['mutation_id'], array_get($moota_settings, "moota_merchant_name"));
-
-					$order_founds++;
-
-				}
-
-			}
-
-		}
-
-		return $order_founds ? true:false;
-	}
+    return $order_founds > 0;
+}
 
 
 	private static function updateEDDUniqueNote(array $mutations)
@@ -355,7 +390,7 @@ class MootaWebhook {
 		global $wpdb;
 		$moota_settings = get_option("moota_settings", []);
 
-		$status_paid = array_get($moota_settings, "wc_success_status", "completed");
+		$status_paid = array_get($moota_settings, "moota_wc_success_status", "completed");
 
 		$sql = "SELECT A.edd_order_id as order_id, A.meta_value AS unique_note, B.subtotal AS total 
 		FROM {$wpdb->edd_ordermeta} A, {$wpdb->edd_orders} B 
@@ -373,7 +408,7 @@ class MootaWebhook {
 
 		foreach($mutations as $mutation){
 
-			if($mutation['amount'] == $meta->total && strpos($mutation['description'], $meta->unique_note)){
+			if($mutation['amount'] == $meta->total && strpos($mutation['description'], $meta->moota_note_code)){
 
 				if( !empty($meta->order_id)) {
 					$admin_email = get_bloginfo('admin_email');
@@ -413,7 +448,6 @@ class MootaWebhook {
 	
 						(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachTransactionId($mutation['mutation_id'], (string)$meta->order_id);
 						(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachPlatform($mutation['mutation_id'], "Easy Digital Downloads");
-						(new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachMerchant($mutation['mutation_id'], array_get($moota_settings, "moota_merchant_name"));
 					}
 	
 					wp_reset_postdata();
@@ -426,4 +460,17 @@ class MootaWebhook {
 		return $order_founds ? true:false;
 	}
 
+	private static function notifyAdminAboutDuplication($mutation_tag, $order_ids) {
+		$admin_email = get_bloginfo('admin_email');
+    $subject = "⚠️ [DUPLIKASI] Mutation Tag: {$mutation_tag}";
+    $message = "Ditemukan " . count($order_ids) . " order dengan mutation_tag yang sama:\n";
+    
+    foreach ($order_ids as $order_id) {
+        $order = wc_get_order($order_id);
+        $message .= "- Order #{$order_id} (Total: " . wc_price($order->get_total()) . ")\n";
+    }
+    
+    $message .= "\n**Auto-konfirmasi dibatalkan**. Mohon verifikasi manual!";
+    wp_mail($admin_email, $subject, $message);
+	}
 }
