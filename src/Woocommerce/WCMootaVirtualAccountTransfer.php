@@ -754,7 +754,6 @@ class WCMootaVirtualAccountTransfer extends WC_Payment_Gateway
                             </button>
                         </div>
                     <?php endif; ?>
-                            
                     <script>
                         // Script tetap ada di sini
                         var gm_button = document.getElementById("moota-get-mutation-button");
