@@ -1,18 +1,19 @@
 <?php
 
 namespace Moota\MootaSuperPlugin;
+
+use DateTimeZone;
+use Exception;
 use Moota\MootaSuperPlugin\Concerns\MootaPayment;
 use Moota\MootaSuperPlugin\Contracts\MootaWebhook;
 use Jeffreyvr\WPSettings\WPSettings;
 use Moota\MootaSuperPlugin\EDD\EDDMootaBankTransfer;
 use Moota\MootaSuperPlugin\Options\WebhookOption;
-use Moota\MootaSuperPlugin\Woocommerce\WCMootaBankTransfer;
+use Moota\MootaSuperPlugin\Woocommerce\QRIS\QRISGateway;
 
 class PluginLoader
 {
     private static $init;
-
-	private string $plugin_name = "moota-super-plugin";
 
 	public function __construct() {
 
@@ -22,13 +23,14 @@ class PluginLoader
 		register_deactivation_hook( MOOTA_FULL_PATH, [ $this, 'deactivation_plugins' ] );
 
         register_shutdown_function(function () {
-        //    print_r( error_get_last() );
         });
 
 		add_action( 'admin_menu', [$this, 'register_setting_page'] );
+		add_action('update_option_moota_settings', [$this, 'clear_cache_on_api_key_change'], 10, 2);
 
 		add_action('admin_notices', [$this, 'production_mode_notice']);
-
+		add_action('wp_ajax_moota_sync_banks', [$this, 'ajax_sync_banks']);
+        add_action('admin_footer', [$this, 'admin_footer_scripts']);
 	}
 
 	public static function init() {
@@ -39,15 +41,22 @@ class PluginLoader
 		return self::$init;
 	}
 
+	public function clear_cache_on_api_key_change($old_value, $new_value) {
+    $old_api_key = array_get($old_value, 'moota_v2_api_key');
+    $new_api_key = array_get($new_value, 'moota_v2_api_key');
+    
+    if ($old_api_key !== $new_api_key) {
+        // Hapus semua cache terkait
+        delete_option('moota_list_banks');
+        delete_option('moota_list_accounts');
+        delete_option('moota_last_sync');
+    }
+}
+
 	public function onload() {
 
 		if ( class_exists( 'WooCommerce' ) ) {
 			add_filter( 'woocommerce_payment_gateways', [ $this, 'add_moota_gateway_class' ] );
-		}
-
-		if( function_exists( 'EDD' ) ){
-
-			EDDMootaBankTransfer::getInstance();
 		}
 
         add_action('wp_enqueue_scripts', [$this, 'front_end_scripts']);
@@ -58,7 +67,6 @@ class PluginLoader
 			$options['webhook-option'] = WebhookOption::class;
 			return $options;
 		});
-
 	}
 
 	/**
@@ -66,8 +74,28 @@ class PluginLoader
 	 * Register Payment Method Woocommerce
 	 * @return mixed
 	 */
-	public function add_moota_gateway_class( $methods ) {
-		$methods[] = WCMootaBankTransfer::class;
+	public function add_moota_gateway_class($methods) {
+		$banks = ['BCA', 'Sinarmas', 'Permata', 'BNC', 'CIMB', 'BJB', 'BNI', 'BRI', 'BTN', 'BSI', 'Jenius', 'Jago', 'Muamalat', 'Maybank', 'Mandiri'];
+		
+		foreach ($banks as $bank) {
+			$bankTransferClass = "Moota\\MootaSuperPlugin\\Woocommerce\\BankTransfer\\{$bank}\\{$bank}Gateway";
+			$vaClass = "Moota\\MootaSuperPlugin\\Woocommerce\\VirtualAccount\\{$bank}\\{$bank}VA";
+			
+			if (class_exists($bankTransferClass)) {
+				$methods[] = $bankTransferClass;
+			}
+			
+			if (class_exists($vaClass)) {
+				$methods[] = $vaClass;
+			}
+		}
+	
+		array_push($methods,
+			QRISGateway::class
+		);
+
+		// var_dump(print_r($methods)); die();
+		
 		return $methods;
 	}
 
@@ -86,16 +114,13 @@ class PluginLoader
 	}
 
 	public function activation_plugins() {
-        MootaWebhook::init();
 	}
 
 	public function deactivation_plugins() {
-
 	}
 
     public function front_end_scripts() {
         $assets = plugin_dir_url( MOOTA_FULL_PATH ) . 'assets/';
-
 
         wp_enqueue_style( 'moota-payment-gateway',  $assets . 'style.css' );
 		wp_enqueue_style( 'moota-toastr',  $assets . 'css/toastr.css' );
@@ -114,20 +139,10 @@ class PluginLoader
 		 */
 		$general_tab = $settings->add_tab(__( 'Umum'));
 
-		$bank_tab = $settings->add_tab(__( 'Bank Tersedia'));
-
 		/**
 		 * Defining Sections
 		 */
 		$api_section = $general_tab->add_section('Pengaturan API');
-
-		$unique_code = $general_tab->add_section("Pengaturan Pembayaran");
-
-		$merchant_section = $general_tab->add_section("Pengaturan Merchant");
-
-		$bank_section = $bank_tab->add_section('List Channels');
-
-		$virtual_section = $bank_tab->add_section('Virtual Account');
 
 		/**
 		 * API Setting Fields
@@ -147,7 +162,19 @@ class PluginLoader
 		$api_section->add_option('text', [
 			'name' => 'moota_v2_api_key',
 			'label' => __('Moota V2 API Key'),
-			"description" => "API Token Moota bisa Anda dapatkan <a href='https://app.moota.co/integrations/personal' target='_blank'>disini</a>"
+			'description' => '
+			<button type="button" style="display: flex; align-items: center;"
+				id="moota-sync-banks" 
+				class="button button-secondary"
+				data-nonce="' . wp_create_nonce('moota_sync_banks') . '"
+			><span class="dashicons dashicons-update"></span> Sinkronisasi Bank</button>
+			<span id="moota-last-sync" style="color: #666;">
+				Terakhir update: ' . $this->get_last_sync_time() . ' GMT+7 (Asia/Jakarta)
+			</span>
+			<span id="moota_info_message"></span>
+			<div><span style="color:red;">Warning!</span> Pastikan sinkronisasi kembali setelah menambah, mengedit, atau menghapus akun di Moota. Periksa dan atur ulang Setelan Bank & Akun jika diperlukan.</div>
+			<p class="description">API Token Moota bisa Anda dapatkan <a href="https://app.moota.co/integrations/personal" target="_blank">disini</a></p>
+			'
 		]);
 
 		$api_section->add_option('text', [
@@ -155,113 +182,6 @@ class PluginLoader
 			'label' => __('Webhook Secret Key'),
 			"description" => "Secret token bisa Anda dapatkan <a href='https://app.moota.co/integrations/webhook' target='_blank'>disini</a>"
 		]);
-
-		/**
-		 * Unique Code Settings Fields
-		 */
-		$unique_code->add_option('text', [
-			'name' => 'moota_refresh_mutation_interval',
-			'label' => __('Interval cek status transaksi'),
-			'type' => "number",
-			'default' => 5,
-			'description' => "durasi waktu untuk check status transaksi"
-		]);
-
-		$unique_code->add_option('checkbox', [
-			"name" => "enable_moota_unique_code",
-			"label" => __('Aktifkan Kode Unik')
-		]);
-
-		$unique_code->add_option('text', [
-			'name' => 'moota_unique_code_start',
-			'label' => __('Angka Kode Unik Dimulai'),
-			'type' => "number",
-			'description' => "Nominal minimal kode unik pembayaran"
-		]);
-
-		$unique_code->add_option('text', [
-			'name' => 'moota_unique_code_end',
-			'label' => __('Angka Kode Unik Berakhir'),
-			'type' => "number",
-			'description' => "Nominal maksimal kode unik pembayaran"
-		]);
-
-		$unique_code->add_option('select', [
-			'name' => 'unique_code_type',
-			'label' => __( 'Tipe Kode Unik', 'textdomain' ),
-			'options' => [
-				'increase' => 'Menaikan Total Transaksi',
-				'decrease' => 'Menurunkan Total Transaksi'
-			]
-		]);
-
-		$unique_code->add_option('textarea', [
-			'name' => 'payment_instruction',
-			'label' => __( 'Instruksi Pembayaran', 'textdomain' ),
-			'description' => "
-				<div>Gunakan Replacer Berikut:</div>
-				<div>Logo Bank : <b>[bank_logo]</b> </div>
-				<div>Nama Bank : <b>[bank_name]</b> </div>
-				<div>Nomor Rekening : <b>[bank_account]</b> </div>
-				<div>Atas Nama Bank : <b>[bank_holder]</b> </div>
-				<div>Kode Unik : <b>[unique_code]</b> </div>
-				<div>Kode Unik Note (untuk berita/note transaksi) : <b>[unique_note]</b> </div>
-				<div>Tombol Check Transaksi : <b>[check_button]</b> </div>
-			",
-			"default" => "
-Harap untuk transfer sesuai dengan jumlah yang sudah ditentukan sampai 3 digit terakhir atau masukan kode [unique_note] kedalam berita / note transfer.
-
-Transfer Ke Bank [bank_name] 
-[bank_logo]
-[bank_account] A/n [bank_holder]
-			
-[check_button]"
-		]);
-
-		/**
-		 * Merchant Setting Fields
-		 */
-		$merchant_section->add_option("text", [
-			"name" => "moota_merchant_name",
-			"label" => "Nama Merchant",
-			'default' => $_SERVER['SERVER_NAME']
-		]);
-
-		$merchant_section->add_option("text", [
-			"name" => "wp_db_prefix",
-			"label" => "Prefix database",
-			"description" => "Hanya diisi jika perlu"
-		]);
-		
-		/**
-		 * Bank Setting Fields
-		 */
-		$moota_settings = !empty(get_option("moota_settings", [])) ? get_option("moota_settings", []):[];
-
-		if(array_has($moota_settings, "moota_v2_api_key")){
-			$banks = (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->getBanks();
-
-			foreach ($banks ?? [] as $bank) {
-				$bank_type = $bank->available_channels;
-				$virtualAccountAdded = false; // Flag untuk melacak penambahan
-			
-				foreach ($bank_type ?? [] as $type) {
-					if ($type->type === 'virtual-account' && !$virtualAccountAdded) {
-						$virtual_section->add_option('checkbox', [
-							'name' => $type->name,
-							'label' => "{$type->name}"
-						]);
-						$virtualAccountAdded = true; // Set flag menjadi true setelah menambahkan
-					} elseif ($type->type === 'bank-transfer') {
-						$bank_section->add_option('checkbox', [
-							'name' => $bank->bank_id,
-							'label' => "{$bank->bank_type} - {$bank->atas_nama}/{$bank->account_number}"
-						]);
-					}
-				}
-			}
-
-		}
 
 		/**
 		 * Plugin Setting Tab 
@@ -275,7 +195,7 @@ Transfer Ke Bank [bank_name]
 			$wc_general_section = $wc_tab->add_section("Pengaturan Umum");
 
 			$wc_general_section->add_option("select", [
-				"name" => "wc_success_status",
+				"name" => "moota_wc_success_status",
 				"label" => "Status Pesanan Ketika Sudah Dibayar",
 				"options" => [
 					'processing' => "Processing",
@@ -287,10 +207,127 @@ Transfer Ke Bank [bank_name]
 				]
 			]);
 		}
-
 		$settings->make();
-
 	}
+
+	public function ajax_sync_banks() {
+		check_ajax_referer('moota_sync_banks', 'nonce');
+		
+		try {
+			if (!current_user_can('manage_options')) {
+				throw new Exception('Akses ditolak');
+			}
+	
+			$moota_settings = get_option('moota_settings', []);
+			$api_key = array_get($moota_settings, 'moota_v2_api_key', '');
+			
+			if (empty($api_key)) {
+				throw new Exception('API Key belum diisi!');
+			}
+	
+			// Panggil API getBanks() dan tangkap error
+			$moota = new MootaPayment($api_key);
+			$moota->clearCache();
+			$banks = $moota->getBanks(true);
+	
+			// Jika API mengembalikan error (misal: token invalid)
+			if (empty($banks) || isset($banks['error'])) {
+				throw new Exception(
+					$banks['error'] ?? 'Token tidak valid atau tidak ada akun apapun yang terdaftar dengan key ini.'
+				);
+			}
+	
+			// Simpan data bank
+			$bankArray = json_decode(json_encode($banks), true);
+			update_option('moota_list_banks', $bankArray);
+			update_option('moota_list_accounts', $bankArray);
+			update_option('moota_last_sync', current_time('mysql', true));
+			
+			wp_send_json_success([
+				'message' => 'Data bank berhasil disinkronisasi! ' . count($banks) . ' Akun aktif ditemukan dalam key ini.',
+				'time' => $this->get_last_sync_time() . ' GMT+7 (Asia/Jakarta)'
+			]);
+		} catch(Exception $e) {
+			// Hapus cache jika token invalid
+			delete_option('moota_list_banks');
+			delete_option('moota_list_accounts');
+	
+			wp_send_json_error([
+				'error' => $e->getMessage()
+			]);
+		}
+	}
+
+    private function get_last_sync_time() {
+        $last_sync = get_option('moota_last_sync');
+    
+    if (empty($last_sync)) {
+        return 'Belum pernah disinkronisasi';
+    }
+
+    try {
+        $utc_timestamp = strtotime($last_sync . ' UTC');
+        
+        // Format ke waktu Jakarta dengan terjemahan
+        return wp_date(
+            'j F Y H:i', 
+            $utc_timestamp, 
+            new DateTimeZone('Asia/Jakarta')
+        );
+    	} catch (Exception $e) {
+        	return 'Format waktu tidak valid';
+    	}
+    }
+
+    public function admin_footer_scripts() {
+        ?>
+        <script>
+        jQuery(document).ready(function($) {
+            $('#moota-sync-banks').on('click', function() {
+                var $button = $(this);
+                $button.prop('disabled', true).find('.dashicons').addClass('spin');
+                
+                $.post(ajaxurl, {
+                    action: 'moota_sync_banks',
+                    nonce: $button.data('nonce')
+                }, function(response) {
+                    if (response.success) {
+                        $('#moota-last-sync').html(
+                            'Terakhir update: ' + response.data.time
+                        );
+                        $('#moota_info_message').html(
+							'<div style="color: green">' + response.data.message + '</div>'
+						);
+                    } else {
+                        $('#moota_info_message').html(
+							'<div style="color: red">Error : ' + response.data.error + '</div>'
+						);
+                    }
+                }).always(function() {
+                    $button.prop('disabled', false)
+                           .find('.dashicons')
+                           .removeClass('spin');
+                });
+            });
+        });
+
+        // CSS untuk animasi putar
+        const style = document.createElement('style');
+        style.textContent = `
+            .dashicons.spin {
+                animation: moota-spin 1s infinite linear;
+                display: inline-block;
+            }
+            @keyframes moota-spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+        </script>
+        <?php
+    }
+
 
 	public function production_mode_notice()
 	{
@@ -309,6 +346,24 @@ Transfer Ke Bank [bank_name]
         </div>
 
 		<?php
+	}
+
+	public static function log_to_file($message) {
+		// Path baru: wp-content/moota-logs/
+		$log_dir = WP_CONTENT_DIR . '/moota-logs/';
+		$log_file = $log_dir . 'debug.log';
+	
+		// Buat direktori jika belum ada
+		if (!file_exists($log_dir)) {
+			mkdir($log_dir, 0755, true); // 0755 = izin direktori
+		}
+	
+		// Format pesan log
+		$timestamp = date('Y-m-d H:i:s');
+		$log_content = "[$timestamp] $message" . PHP_EOL;
+	
+		// Tulis ke file
+		file_put_contents($log_file, $log_content, FILE_APPEND);
 	}
 
 }

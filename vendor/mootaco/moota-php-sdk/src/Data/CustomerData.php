@@ -4,8 +4,8 @@ namespace Moota\Moota\Data;
 
 class CustomerData {
     public static string $name;
-    public static ?string $email;
-    public static ?string $phone;
+    public static ?string $email = null;
+    public static ?string $phone = null;
 
 
     private function __construct(
@@ -16,7 +16,7 @@ class CustomerData {
         self::$phone = $phone;
     }
 
-    public static function create(string $name, ?string $email, ?string $phone): CustomerData {
+    public static function create(string $name, ?string $email = null, ?string $phone = null): CustomerData {
         return new self($name, $email, $phone);
     }
 
