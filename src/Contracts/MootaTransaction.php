@@ -12,17 +12,30 @@ use WC_Customer;
 
 class MootaTransaction
 {
-    public static function request( $order_id, $channel_id, $with_unique_code, $with_admin_fee, $admin_fee_amount, $start_unique_code, $end_unique_code, $payment_method_type = 'bank_transfer') {
+    public static function request( $order_id, $channel_id, $with_unique_code, $with_admin_fee, $admin_fee_amount, $start_unique_code, $end_unique_code, ? string $bankCode) {
 		try {
 			
 			global $woocommerce;
 			$order = new WC_Order( $order_id );
 			$account_lists	= get_option("moota_list_accounts", []);
+			$bank_list = get_option("moota_list_banks", []);
 			$bank_settings 	= get_option("woocommerce_wc-super-moota-bank-transfer_settings", []);
+
+			if($bankCode) {
+				$bank_settings = get_option('woocommerce_moota_' . strtolower($bankCode) . '_transfer_settings');
+			}
 			
 			$account = array_filter($account_lists, function($bank) use ($channel_id) {
 				return $bank['bank_id'] == $channel_id;
 			});
+
+			foreach ($bank_list as $bank) {
+				if ($bank['bank_id'] === $channel_id) {
+					$bank_logo = $bank['icon']; // Ambil URL logo bank
+					$account_number = $bank['account_number'];
+					break;
+				}
+			}
 
 			// Jika $account adalah array multidimensi (seperti contoh di var_dump)
 			$accountObject = !empty($account) ? (object) reset($account) : null;
@@ -158,7 +171,7 @@ class MootaTransaction
 				
 				try {
 					$create_transaction = CreateTransactionData::create(
-						$order_id,
+						"",
 						$account['bank_id'], 
 						$customer,
 						$items,
@@ -197,6 +210,8 @@ class MootaTransaction
 					$order->update_meta_data("moota_redirect", $transaction->data->payment_url);
 					$order->update_meta_data("moota_va_number", $transaction->data->va_number);
 					$order->update_meta_data('moota_expire_at', $transaction->data->expired_at);
+					$order->update_meta_data('moota_username_bank', $transaction->data->bank_account->username);
+					$order->update_meta_data('moota_icon_url', $transaction->data->bank_account->icon);
 					$order->save();
 					
 					$woocommerce->cart->empty_cart();
@@ -222,6 +237,120 @@ class MootaTransaction
 					}
 
 					$woocommerce->cart->empty_cart();
+					
+					return [
+						'result' => 'failure',
+						'refresh' => true
+					];
+				}
+			}
+
+			if ($accountObject->bank_type === "qris") {
+				$customer = CustomerData::create(
+					$order->get_billing_first_name() . " " . $order->get_billing_last_name(),
+					$order->get_billing_email(),
+					ltrim($order->get_billing_phone(), "+")
+				);
+			
+				// Validasi khusus QRIS
+				if (empty($_POST['billing_phone'])) {
+					wc_add_notice('Nomor HP wajib diisi untuk pembayaran QRIS', 'error');
+					return [
+						'result' => 'failure',
+						'refresh' => true
+					];
+				}
+			
+				if ((int)WC()->cart->total < 10000) {
+					wc_add_notice('Total Pembayaran dengan QRIS Harus Senilai Rp10.000 atau Lebih!', 'error');
+					return [
+						'result' => 'failure',
+						'refresh' => true
+					];
+				}
+			
+				try {
+					// Kumpulkan item produk
+					$items = [];
+					foreach ($order->get_items() as $item_id => $item) {
+						$product = $item->get_product();
+						if ($product && is_a($product, 'WC_Product')) {
+							$items[] = [
+								'name'  => $item->get_name(),
+								'qty'   => $item->get_quantity(),
+								'price' => $product->get_price(),
+								'sku'   => $product->get_sku() ?? "product",
+							];
+						}
+					}
+			
+					// Buat transaksi QRIS
+					$create_transaction = CreateTransactionData::create(
+						"",
+						$account['bank_id'],
+						$customer,
+						$items,
+						$order->get_total(),
+						$account['bank_type'],
+						null,
+						null,
+						null,
+						get_option('woocommerce_hold_stock_minutes', [])
+					);
+			
+					$transaction = MootaApi::createTransaction($create_transaction);
+			
+					// Handle error response
+					if (isset($transaction->errors) && $transaction->status !== 'success') {
+						$errorMessage = $transaction->message ?? 'Gagal membuat transaksi QRIS';
+						
+						if (!empty($transaction->errors)) {
+							foreach ($transaction->errors as $field => $messages) {
+								$errorMessage .= "\n" . implode("\n", $messages);
+							}
+						}
+						
+						throw new Exception($errorMessage);
+					}
+			
+					// Simpan metadata khusus QRIS
+					$order->update_meta_data("moota_qris_url", $transaction->data->qr_url);
+					$order->update_meta_data("moota_bank_id", $channel_id);
+					$order->update_meta_data('moota_qris_tag', "moota_qris" . $order->get_total());
+					$order->update_meta_data("moota_expire_at", $transaction->data->expired_at);
+					$order->update_meta_data("moota_bank_details", [
+						'merchant_name' => $transaction->data->merchant_name,
+						'merchant_id'   => $transaction->data->merchant_id
+					]);
+					$order->save();
+			
+					// Log transaksi
+					MootaWebhook::addLog(
+						"Transaksi QRIS berhasil dibuat: \n" . 
+						print_r($transaction, true)
+					);
+			
+					// Kosongkan keranjang
+					WC()->cart->empty_cart();
+			
+					return [
+						'result'   => 'success',
+						'redirect' => self::get_return_url($order)
+					];
+			
+				} catch (Exception $e) {
+					// Handle error
+					wc_add_notice('Gagal memproses pembayaran QRIS: ' . $e->getMessage(), 'error');
+					PluginLoader::log_to_file(
+						"QRIS Error: " . $e->getMessage() . PHP_EOL .
+						print_r($transaction ?? null, true)
+					);
+			
+					if ($order) {
+						$order->update_status('failed', $e->getMessage());
+					}
+			
+					WC()->cart->empty_cart();
 					
 					return [
 						'result' => 'failure',
@@ -263,6 +392,8 @@ class MootaTransaction
 			$order->update_meta_data( "moota_unique_code", $unique_code );
 			$order->update_meta_data( "moota_note_code", $note_code );
 			$order->update_meta_data( "moota_total", $all_total);
+			$order->update_meta_data('moota_bank_logo_url', $bank_logo);
+			$order->update_meta_data('moota_bank_account_number', $account_number);
 			$order->update_meta_data( "moota_mutation_tag", "{$channel_id}.{$all_total}");
 			$order->update_meta_data( "moota_mutation_note_tag", "{$channel_id}.{$note_code}");
 			

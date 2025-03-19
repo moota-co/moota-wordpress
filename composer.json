@@ -4,7 +4,9 @@
     "license": "M.I.T",
     "autoload": {
         "psr-4": {
-            "Moota\\MootaSuperPlugin\\": "src/"
+            "Moota\\MootaSuperPlugin\\": "src/",
+            "Moota\\MootaSuperPlugin\\Woocommerce\\BankTransfer\\": "src/Woocommerce/BankTransfer/",
+            "Moota\\MootaSuperPlugin\\Woocommerce\\VirtualAccount\\": "src/Woocommerce/VirtualAccount/"
         }
     },
     "authors": [

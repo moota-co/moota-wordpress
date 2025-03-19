@@ -9,8 +9,7 @@ use Moota\MootaSuperPlugin\Contracts\MootaWebhook;
 use Jeffreyvr\WPSettings\WPSettings;
 use Moota\MootaSuperPlugin\EDD\EDDMootaBankTransfer;
 use Moota\MootaSuperPlugin\Options\WebhookOption;
-use Moota\MootaSuperPlugin\Woocommerce\WCMootaBankTransfer;
-use Moota\MootaSuperPlugin\Woocommerce\WCMootaVirtualAccountTransfer;
+use Moota\MootaSuperPlugin\Woocommerce\QRIS\QRISGateway;
 
 class PluginLoader
 {
@@ -75,9 +74,28 @@ class PluginLoader
 	 * Register Payment Method Woocommerce
 	 * @return mixed
 	 */
-	public function add_moota_gateway_class( $methods ) {
-		$methods[] = WCMootaBankTransfer::class;
-		$methods[] = WCMootaVirtualAccountTransfer::class;
+	public function add_moota_gateway_class($methods) {
+		$banks = ['BCA', 'Sinarmas', 'Permata', 'BNC', 'CIMB', 'BJB', 'BNI', 'BRI', 'BTN', 'BSI', 'Jenius', 'Jago', 'Muamalat', 'Maybank', 'Mandiri'];
+		
+		foreach ($banks as $bank) {
+			$bankTransferClass = "Moota\\MootaSuperPlugin\\Woocommerce\\BankTransfer\\{$bank}\\{$bank}Gateway";
+			$vaClass = "Moota\\MootaSuperPlugin\\Woocommerce\\VirtualAccount\\{$bank}\\{$bank}VA";
+			
+			if (class_exists($bankTransferClass)) {
+				$methods[] = $bankTransferClass;
+			}
+			
+			if (class_exists($vaClass)) {
+				$methods[] = $vaClass;
+			}
+		}
+	
+		array_push($methods,
+			QRISGateway::class
+		);
+
+		// var_dump(print_r($methods)); die();
+		
 		return $methods;
 	}
 

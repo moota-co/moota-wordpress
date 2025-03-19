@@ -174,17 +174,22 @@ class MootaWebhook {
 			// VA: mutation_tag = "moota_{va_number}_{amount}"
 			$va_number = array_get($mutation, 'account_number', '');
 			$mutation_tag = "moota_" . trim($va_number) . "_{$amount}";
+		} elseif (strtolower($bank_type) === 'qris') {
+			// QRIS: mutation_tag = "moota_qris{total}"
+			$mutation_tag = "moota_qris" . $amount; // Sesuaikan dengan format yang diinginkan
 		} else {
 			// Non-VA: mutation_tag = "bank_id.amount"
 			$mutation_tag = "{$bank_id}.{$amount}";
 		}
+
+		$meta_key = (strtolower($bank_type) === 'qris') ? 'moota_qris_tag' : 'moota_mutation_tag';
 	
 		// Query order dengan mutation_tag
         $order_ids = wc_get_orders([
             'limit'        => -1,
             'orderby'      => 'date_created',
             'order'        => 'DESC',
-            'meta_key'     => 'moota_mutation_tag',
+            'meta_key'     => $meta_key,
             'meta_value'   => $mutation_tag,
             'status'       => ['pending', 'on-hold'],
             'return'       => 'ids',

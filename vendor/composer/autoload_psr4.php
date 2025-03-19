@@ -16,6 +16,8 @@ return array(
     'Psr\\Container\\' => array($vendorDir . '/psr/container/src'),
     'Psr\\Cache\\' => array($vendorDir . '/psr/cache/src'),
     'Moota\\Moota\\' => array($vendorDir . '/mootaco/moota-php-sdk/src'),
+    'Moota\\MootaSuperPlugin\\Woocommerce\\VirtualAccount\\' => array($baseDir . '/src/Woocommerce/VirtualAccount'),
+    'Moota\\MootaSuperPlugin\\Woocommerce\\BankTransfer\\' => array($baseDir . '/src/Woocommerce/BankTransfer'),
     'Moota\\MootaSuperPlugin\\' => array($baseDir . '/src'),
     'Jeffreyvr\\WPSettings\\' => array($vendorDir . '/jeffreyvanrossum/wp-settings/src'),
     'Doctrine\\Deprecations\\' => array($vendorDir . '/doctrine/deprecations/src'),

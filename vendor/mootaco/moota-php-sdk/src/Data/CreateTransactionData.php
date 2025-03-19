@@ -3,7 +3,7 @@
 namespace Moota\Moota\Data;
 
 class CreateTransactionData {
-    public static string $order_id;
+    public static ?string $order_id;
     public static string $bank_account_id;
     public static CustomerData $customer;
     public static array $items;

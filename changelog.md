@@ -44,7 +44,7 @@
 ## [1.0.13] - 2024/05/10
 - Fix Woocommerce bug when decreasing unique code
 
-## [2.0] - 2025/03/03
+## [2.0.0] - 2025/03/03
 Fixes   :
 - Mengoptimalisasi Performa Plugin dengan Sistem Cache
 - Memindahkan List Bank Tersedia & Settingan Kode Unik Ke Halaman Payment Settings WooCommerce (Bank Transfer & Virtual Transfer)
