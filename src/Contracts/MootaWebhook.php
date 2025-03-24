@@ -87,7 +87,7 @@ class MootaWebhook {
 			$signature = hash_hmac('sha256', $response, $secret ?? "");
 	
 			// Pengecekan test webhook (hanya di production mode)
-			if (empty($moota_mode) && !empty($data[0]['amount']) && $data[0]['amount'] == 10000) {
+			if ($moota_mode == "" && !empty($data[0]['amount']) && $data[0]['amount'] == 10000) {
 				$response_data['Message'] = "OK (Test Webhook)";
 				return new WP_REST_Response($response_data, $http_code);
 			}
