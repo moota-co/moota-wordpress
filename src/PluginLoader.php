@@ -75,7 +75,7 @@ class PluginLoader
 	 * @return mixed
 	 */
 	public function add_moota_gateway_class($methods) {
-		$banks = ['BCA', 'Sinarmas', 'Permata', 'BNC', 'CIMB', 'BJB', 'BNI', 'BRI', 'BTN', 'BSI', 'Jenius', 'Jago', 'Muamalat', 'Maybank', 'Mandiri'];
+		$banks = ['BCA', 'Sinarmas', 'Permata', 'BNC', 'CIMB', 'BJB', 'BNI', 'BRI', 'BTN', 'BSI', 'Muamalat', 'Maybank', 'Mandiri'];
 		
 		foreach ($banks as $bank) {
 			$bankTransferClass = "Moota\\MootaSuperPlugin\\Woocommerce\\BankTransfer\\{$bank}\\{$bank}Gateway";
@@ -204,6 +204,14 @@ class PluginLoader
 					"canceled" => "Canceled",
 					"refunded" => "Refunded",
 					"completed" => "Completed"
+				]
+			]);
+			$wc_general_section->add_option("select", [
+				"name" => "moota_wc_initiate_status",
+				"label" => "Status Pesanan Setelah Membuat Order",
+				"options" => [
+					"on-hold" => "On Hold",
+					"pending" => "Pending Payment"
 				]
 			]);
 		}

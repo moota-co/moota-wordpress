@@ -18,6 +18,8 @@ class MootaTransaction
 			global $woocommerce;
 			$order = new WC_Order( $order_id );
 			$account_lists	= get_option("moota_list_accounts", []);
+			$settings = get_option("moota_settings");
+			$status = array_get($settings, 'moota_wc_initiate_status');
 			$bank_list = get_option("moota_list_banks", []);
 			$bank_settings 	= get_option("woocommerce_wc-super-moota-bank-transfer_settings", []);
 
@@ -213,6 +215,16 @@ class MootaTransaction
 					$order->update_meta_data('moota_username_bank', $transaction->data->bank_account->username);
 					$order->update_meta_data('moota_icon_url', $transaction->data->bank_account->icon);
 					$order->save();
+
+					if ($status == 'on-hold') {
+						$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+					} elseif ($status == 'pending') {
+						$order->update_status( 'pending', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+					} else {
+						// Jika nilai status tidak sesuai dengan kondisi di atas, maka Anda dapat melakukan aksi lainnya
+						// Contohnya:
+						$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+					}
 					
 					$woocommerce->cart->empty_cart();
 				
@@ -329,6 +341,16 @@ class MootaTransaction
 						"Transaksi QRIS berhasil dibuat: \n" . 
 						print_r($transaction, true)
 					);
+
+					if ($status == 'on-hold') {
+						$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+					} elseif ($status == 'pending') {
+						$order->update_status( 'pending', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+					} else {
+						// Jika nilai status tidak sesuai dengan kondisi di atas, maka Anda dapat melakukan aksi lainnya
+						// Contohnya:
+						$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+					}
 			
 					// Kosongkan keranjang
 					WC()->cart->empty_cart();
@@ -424,7 +446,15 @@ class MootaTransaction
 			$payment_link = self::get_return_url( $order );
 	
 			// Mark as on-hold (we're awaiting the cheque)
-			$order->update_status( 'pending', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+			if ($status == 'on-hold') {
+				$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+			} elseif ($status == 'pending') {
+				$order->update_status( 'pending', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+			} else {
+				// Jika nilai status tidak sesuai dengan kondisi di atas, maka Anda dapat melakukan aksi lainnya
+				// Contohnya:
+				$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+			}
 	
 			// Remove cart
 			$woocommerce->cart->empty_cart();

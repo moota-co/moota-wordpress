@@ -6,13 +6,15 @@ Repositori ini berisi kode untuk plugin Moota WordPress, yang memungkinkan Anda 
 
 ## Fitur Utama
 - Mengintegrasikan gateway pembayaran Moota ke toko WordPress Anda
-- Mendukung metode pembayaran transfer bank
+- Mendukung metode pembayaran dengan transfer bank
+- Mendukung metode pembayaran dengan virtual account
+- Mendukung metode pembayaran dengan QRIS
 - Memperluas fungsionalitas pembayaran untuk WooCommerce dan Easy Digital Downloads
 - Menyederhanakan manajemen dan rekonsiliasi pembayaran
 
 ## Mulai
 1. ## Persyaratan
-    - PHP versi 7.4 atau lebih tinggi
+    - PHP versi 8.0 atau lebih tinggi
     - WordPress versi 6.0 atau lebih tinggi
 2. ## Instalasi
     - Unduh plugin langsung dari repositori GitHub ini.
@@ -24,7 +26,7 @@ Repositori ini berisi kode untuk plugin Moota WordPress, yang memungkinkan Anda 
 ## Dukungan
 Untuk bantuan dengan plugin, silakan hubungi tim dukungan kami melalui saluran berikut:
 
-- Moota Support [hi@moota.co](mailto:hi@moota.co)
+- Moota Support [app.moota.co](https://app.moota.co/login)
 - Moota ChitChat [Facebook Forum Moota ChitChat | Facebook](https://www.facebook.com/groups/mootasupport)
 
 ## Dapatkan Berita Terupdate Dari Kami:
