@@ -53,8 +53,15 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
         );
 
         add_action(
-            'woocommerce_order_details_after_order_table',
+            'woocommerce_order_details_after_order_table_items',
             [$this, 'order_details'],
+            10,
+            1
+        );
+
+        add_action(
+            'woocommerce_order_details_after_order_table',
+            [$this, 'order_instructions'],
             10,
             1
         );
@@ -88,9 +95,26 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
                 'desc_tip'    => true,
                 'class'       => 'wc-enhanced-select',
             ],
-            'account_holder' => [
-                'title' => 'Bank Label',
-                'type' => 'text'
+            'payment_instructions' => [
+                'title'       => 'Instruksi Pembayaran',
+                'type'        => 'textarea',
+                'description' => 'Kolom ini diisi untuk Mengatur Pesan Instruksi Pembayaran di halaman Order Received. Bisa juga Mengrender HTML.' .
+                    "
+				<div>Gunakan Replacer Berikut:</div>
+				<div>Logo Bank : <b>[bank_logo]</b> </div>
+				<div>Nama Bank : <b>[bank_name]</b> </div>
+				<div>Nomor Virtual Account : <b>[virtual_account]</b> </div>
+				<div>Atas Nama Bank : <b>[account_holder]</b> </div>
+				<div>Total Harga : <b>[amount]</b> </div>
+				<div>Kembali ke Toko : <b>[shop_url]</b> </div>
+                <div>Expire Order : <b>[expire_at]</b> </div>
+			",
+                'default'     =>  "
+                Harap untuk transfer ke Nomor Virtual Account [bank_name] Berikut : <br><br>
+                [virtual_account]. <br> <br>
+                Dengan Jumlah Rp[amount] <br>
+                
+                <div>Order akan Kadaluarsa dalam : [expire_at]</div>"
             ],
             'admin_fee_amount' => [
                 'title' => 'Nilai Biaya Admin',
@@ -171,7 +195,7 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
         );
     }
 
-    public function order_details($order)
+    public function order_instructions($order)
     {
         if (
             !$order instanceof WC_Order ||
@@ -185,179 +209,48 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
         $dateTime->setTimezone(new DateTimeZone('Asia/Jakarta'));
         $formattedDate = $dateTime->format('d F Y - H:i');
         $order_status = $order->get_status();
-        $status_label = wc_get_order_status_name($order_status);
 
-        // Mapping warna status
-        $status_colors = [
-            'pending'    => ['bg' => 'bg-yellow-100', 'text' => 'text-yellow-800'],
-            'processing' => ['bg' => 'bg-blue-100', 'text' => 'text-blue-800'],
-            'on-hold'    => ['bg' => 'bg-purple-100', 'text' => 'text-purple-800'],
-            'completed'  => ['bg' => 'bg-green-100', 'text' => 'text-green-800'],
-            'cancelled'  => ['bg' => 'bg-red-100', 'text' => 'text-red-800'],
-            'refunded'   => ['bg' => 'bg-pink-100', 'text' => 'text-pink-800'],
-            'failed'     => ['bg' => 'bg-gray-100', 'text' => 'text-gray-800'],
+        $listSettings = get_option('moota_list_accounts');
+        $bankSettings = $this->get_option('payment_instructions');
+
+        $bankId = $order->get_meta('moota_bank_id');
+        $username = '';
+
+        foreach ($listSettings as $bank) {
+            if ($bank['bank_id'] === $bankId) {
+                $username = $bank['username'];
+                break; // Keluar dari loop setelah menemukan bank yang sesuai
+            }
+        }
+        $data = [
+            'virtual_account'=> "<span class='font-bold'>".$order->get_meta('moota_va_number')."</span>",
+            'account_holder' => "<span class='font-bold'>" . $username . "</span>",
+            'bank_logo'      => "<img src='" . $bank['icon'] . "'>",
+            'bank_name'      => "<span class='font-bold'>" . strtoupper($this->bankCode) . "</span>",
+            'amount'         => "<span class='font-bold'>" . $order->get_total(),
+            'shop_url'       => esc_url(wc_get_page_permalink('shop')),
+            'expire_at'      => $formattedDate
         ];
 
-        $current_color = $status_colors[$order_status] ?? ['bg' => 'bg-gray-100', 'text' => 'text-gray-800'];
+        $rendered_content = self::render_payment_instructions($bankSettings, $data);
 
 ?>
-        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-        <div class="moota-payment-instructions border lg:w-1/2 items-center mx-auto mt-8 p-6 bg-white rounded-lg shadow-md">
-            <!-- Header -->
-            <div class="border-b pb-4 mb-6">
-                <h3 class="text-xl font-bold text-gray-800 flex items-center">
-                    <svg class="w-6 h-6 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                    </svg>
-                    Instruksi Pembayaran Virtual Account
-                </h3>
-                <p class="text-sm text-gray-600 mt-1">Simpan bukti transfer sebagai tanda pembayaran</p>
-            </div>
-
-            <!-- Content Grid -->
-            <div class="grid grid-cols-1 gap-6">
-                <!-- Bank Details -->
-                <div class="space-y-4">
-                    <div class="flex items-center space-x-4">
-                        <div class="flex-shrink-0">
-                            <img src="<?php echo esc_url($order->get_meta('moota_icon_url')) ?>"
-                                alt="Bank Logo"
-                                class="w-16 h-16 object-contain">
-                        </div>
-                        <div>
-                            <h4 class="font-semibold text-gray-800"><?php echo esc_html($this->bankName) ?></h4>
-                            <p class="text-sm text-gray-600">Kode Bank: <?php echo esc_html(strtoupper($this->bankCode)) ?></p>
-                        </div>
-                    </div>
-
-                    <div class="space-y-2">
-                        <?php if ($order->get_status() != "cancelled"): ?>
-                            <div class="flex justify-between items-center">
-                                <span class="text-gray-600 flex-1">Nomor VA</span>
-                                <div class="flex items-center">
-                                    <span class="font-medium text-gray-800" id="va-number">
-                                        <?php echo $order->get_meta('moota_va_number') ?>
-                                    </span>
-                                    <button id="copy-va" class="ml-2 p-1 rounded-md bg-gray-200 hover:bg-gray-300 focus:outline-none">
-                                        <svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-                                            <path fill-rule="evenodd" d="M18 3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1V9a4 4 0 0 0-4-4h-3a1.99 1.99 0 0 0-1 .267V5a2 2 0 0 1 2-2h7Z" clip-rule="evenodd" />
-                                            <path fill-rule="evenodd" d="M8 7.054V11H4.2a2 2 0 0 1 .281-.432l2.46-2.87A2 2 0 0 1 8 7.054ZM10 7v4a2 2 0 0 1-2 2H4v6a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3Z" clip-rule="evenodd" />
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600 flex-1">Jumlah Transfer</span>
-                            <span class="font-medium text-blue-600 flex-1 text-right"><?php echo $order->get_formatted_order_total() ?></span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600 flex-1">Status Pembayaran</span>
-                            <span class="px-3 py-1 rounded-full text-center <?php echo $current_color['bg']; ?> <?php echo $current_color['text']; ?> font-medium flex-1"><?php echo esc_html($status_label); ?></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Block Jika Copy Button di Click -->
-                <div id="copy-message" class="bg-green-50 p-4 text-sm rounded-lg border border-green-200 hidden">
-                    <div class="flex">
-                        <svg class="flex-shrink-0 w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M6 10l2 2 6-6 1.5 1.5-7.5 7.5-3.5-3.5L6 10z" clip-rule="evenodd" />
-                        </svg>
-                        <div class="ml-3">
-                            <span class="text-green-600 font-bold text-center">Nomor VA telah disalin!</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Payment Deadline -->
-                <div class="flex items-center p-2 bg-red-100 rounded-lg border text-sm text-red-500">
-                    <svg class="flex-shrink-0 mr-2 w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    Harap melakukan pembayaran sebelum:
-                    <span class="font-medium ml-1 text-red-700"><?php echo $formattedDate ?></span>
-                </div>
-
-                <!-- QR Code & Notes -->
-                <div class="space-y-6">
-                    <?php if ($order->get_status() === "completed"): ?>
-                        <div class="bg-green-50 p-4 rounded-lg border border-green-200">
-                            <div class="flex">
-                                <svg class="flex-shrink-0 w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M6 10l2 2 6-6 1.5 1.5-7.5 7.5-3.5-3.5L6 10z" clip-rule="evenodd" />
-                                </svg>
-                                <div class="ml-3">
-                                    <h4 class="text-sm font-medium text-green-800">Terima Kasih!</h4>
-                                    <div class="mt-2 text-sm text-green-700">
-                                        <p>Terima kasih telah melakukan pemesanan. Kami berharap dapat melayani Anda lagi di masa depan!</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-            <!-- Action Buttons -->
-            <div class="mt-6 grid grid-cols-1 items-center gap-4" style="justify-items: stretch;">
-                <?php if ($order->get_status() != "cancelled" && $order->get_status() != "completed"): ?>
-                    <!-- Tombol Cek Status Pembayaran -->
-                    <a href="javascript:void(0)"
-                        onclick="window.location.reload()"
-                        style="display: inline-flex; 
-              align-items: center; 
-              justify-content: center; 
-              width: 100%;
-              padding: 12px; 
-              background-color: #3b82f6; 
-              color: white; 
-              border-radius: 0.5rem; 
-              box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); 
-              text-decoration: none; 
-              transition: background-color 0.2s;
-              cursor: pointer;
-              margin: 4px;">
-                        <svg style="width: 1.25rem; height: 1.25rem; margin-right: 0.5rem;"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        Cek Status Pembayaran
-                    </a>
-                <?php endif; ?>
-                <!-- Tombol Kembali ke Toko -->
-                <a href="<?php echo esc_url(wc_get_page_permalink('shop')); ?>"
-                    style="display: inline-flex; 
-              align-items: center; 
-              justify-content: center; 
-              width: 100%;
-              padding: 8px 16px; 
-              box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-              font-weight: 500; 
-              border-radius: 0.375rem; 
-              color: black; 
-              text-decoration: none; 
-              transition: background-color 0.2s, color 0.2s;
-              margin: 4px;
-              border-bottom: 1px solid currentColor;">
-                    <svg style="width: 1.25rem; height: 1.25rem; margin-right: 0.5rem;"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                    </svg>
-                    Kembali ke Toko
-                </a>
-            </div>
-        </div>
-
+<?php if ($order->get_status() != 'cancelled') : ?>
+    <table class="woocommerce-table woocommerce-table--order-details shop_table order_details">
+    <tfoot>
+        <tr style="border: none;">
+            <th colspan="2" style="border: none; padding-bottom: 0;">
+                <h3 class="font-bold">Instruksi Pembayaran</h3>
+            </th>
+        </tr>
+        <tr style="border: none;">
+            <td colspan="2" style="border: none; padding-top: 0;">
+                <?= html_entity_decode($rendered_content) ?>
+            </td>
+        </tr>
+    </tfoot>
+</table>
+<?php endif; ?>
         <script>
             jQuery(document).ready(function($) {
                 $('#copy-va').on('click', function() {
@@ -451,7 +344,7 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
                     <p>Gunakan Pembayaran dengan Virtual Account <?= strtoupper($this->bankCode) ?> dari Moota dan Winpay.</p>
                 <?php endif; ?>
             </div>
-<?php
+        <?php
 
         } catch (Throwable $e) {
             PluginLoader::log_to_file(
@@ -518,5 +411,79 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
             "",
             $this->bankCode
         );
+    }
+
+    public function order_details($order)
+    {
+        if (
+            !$order instanceof WC_Order ||
+            $order->get_payment_method() !== $this->id
+        ) {
+            return;
+        }
+
+        $listSettings = get_option('moota_list_accounts');
+        $bankId = $order->get_meta('moota_bank_id');
+        $username = '';
+        $va = $order->get_meta('moota_va_number');
+        $order_status = $order->get_status();
+        $status_label = wc_get_order_status_name($order_status);
+
+        foreach ($listSettings as $bank) {
+            if ($bank['bank_id'] === $bankId) {
+                $username = $bank['username'];
+                break; // Keluar dari loop setelah menemukan bank yang sesuai
+            }
+        }
+
+        $bankSettings = get_option('woocommerce_moota_' . strtolower($this->bankCode) . '_transfer_settings');
+        $order_status = $order->get_status();
+
+        // Tampilkan username
+        echo '<tr class="moota-order-username-detail">';
+        echo '<th scope="row" style="font-weight: 700;">' . __('Nama Penerima', 'textdomain') . '</th>';
+        echo '<td>' . $username . '</td>';
+        echo '</tr>';
+        echo '<tr class="moota-order-number-account-detail">';
+        echo '<th scope="row" style="font-weight: 700;">' . __('Nomor VA', 'textdomain') . '</th>';
+        echo '<td style="align-items: center;">';
+
+        // Cek status order
+        if ($order->get_status() === 'cancelled') {
+            // Jika status canceled, tampilkan pesan kadaluarsa
+            echo '<span class="font-bold">Nomor VA ini telah Kadaluarsa</span>';
+        } else {
+            // Jika tidak canceled, tampilkan nomor VA
+            echo '<span id="va-number" style="display: none;">' . $va . '</span>';
+            echo $va;
+        }
+
+        echo '<button id="copy-va" class="ml-2 p-1 rounded-md bg-gray-200 hover:bg-gray-300 focus:outline-none">
+    <svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+        <path fill-rule="evenodd" d="M18 3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1V9a4 4 0 0 0-4-4h-3a1.99 1.99 0 0 0-1 .267V5a2 2 0 0 1 2-2h7Z" clip-rule="evenodd" />
+        <path fill-rule="evenodd" d="M8 7.054V11H4.2a2 2 0 0 1 .281-.432l2.46-2.87A2 2 0 0 1 8 7.054ZM10 7v4a2 2 0 0 1-2 2H4v6a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3Z" clip-rule="evenodd" />
+    </svg>
+</button>';
+        echo '</td>';
+        echo '</tr>';
+        ?>
+<?php
+    }
+
+    public static function render_payment_instructions($content, $data = [])
+    {
+        // Daftar placeholder dan nilainya
+        $placeholders = [
+            '[virtual_account]' => isset($data['virtual_account']) ? $data['virtual_account'] : '',
+            '[account_holder]' => isset($data['account_holder']) ? $data['account_holder'] : '',
+            '[bank_logo]'      => isset($data['bank_logo'])      ? $data['bank_logo']      : '',
+            '[bank_name]'      => isset($data['bank_name'])      ? $data['bank_name']      : '',
+            '[amount]'         => isset($data['amount'])         ? $data['amount']         : '',
+            '[shop_url]'       => isset($data['shop_url'])       ? $data['shop_url']       : '',
+            '[expire_at]'      => isset($data['expire_at'])      ? $data['expire_at']      : '',
+        ];
+
+        // Ganti semua placeholder dengan nilainya
+        return str_replace(array_keys($placeholders), array_values($placeholders), $content);
     }
 }

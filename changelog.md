@@ -53,6 +53,7 @@ Fixes   :
 
 Feature :
 - Menambahkan Payment Baru Moota - Virtual Account Transfer
+- Menambahkan Payment Baru Moota - QRIS Payment
 - Menambahkan Button Synchronize Banks untuk sinkronisasi Daftar Akun Moota
 - Ketentuan Baru untuk Checkout : Bila menggunakan Payment Virtual account Moota, Customer Wajib Mengisi No.HP
 - Ketentuan Baru untuk Checkout : Bila menggunakan Payment Virtual account Moota, Jumlah Pembelian Customer Harus Melebihi Rp10.000
