@@ -1,150 +1,472 @@
 <?php
 
 namespace Moota\MootaSuperPlugin\Contracts;
-use Moota\MootaSuperPlugin\Concerns\MootaPayment;
+use Exception;
+use Moota\Moota\Data\CreateTransactionData;
+use Moota\Moota\Data\CustomerData;
+use Moota\Moota\MootaApi;
+use Moota\MootaSuperPlugin\PluginLoader;
+use Throwable;
 use WC_Order;
+use WC_Customer;
 
 class MootaTransaction
 {
-    public static function request( $order_id, $channel_id, $with_unique_code, $start_unique_code, $end_unique_code, $payment_method_type = 'bank_transfer') {
-		global $woocommerce;
-		$order = new WC_Order( $order_id );
-
-		$moota_settings = get_option("moota_settings", []);
-
-		$unique_verification = array_get($moota_settings, "unique_code_verification_type", "nominal");
-
-		$items = [];
-		/**
-		 * @var $item WC_Order_Item_Product
-		 */
-		foreach ( $order->get_items() as $item ) {
-			$product = wc_get_product( $item->get_product_id() );
-
-			$image_meta = wp_get_attachment_metadata( $item->get_product_id() );
-			$image_file = get_attached_file( $item->get_product_id(), false );
-
-			$image_url = empty( $image_meta['original_image'] ) ? $image_file : path_join( dirname( $image_file ), $image_meta['original_image'] );
-
-			if(empty($image_url)){
-				$image_url = get_the_post_thumbnail_url( $item->get_product_id() );
-			}
-
-			$items[] = [
-				'name'      => $item->get_name(),
-				'qty'       => $item->get_quantity(),
-				'price'     => $product->get_price() * $item->get_quantity(),
-				'sku'       => $product->get_sku() ?? "product",
-				'image_url' => $image_url
-			];
-		}
-
-        
-
-		if ( $order->get_shipping_total() ) {
-			$items[] = [
-				'name'      => 'Ongkos Kirim',
-				'qty'       => 1,
-				'price'     => $order->get_shipping_total(),
-				'sku'       => 'shipping-cost',
-				'image_url' => ''
-			];
-		}
-
-		$tax = 0;
-
-		if ( $order->get_tax_totals() ) {
-			foreach ( $order->get_tax_totals() as $i ) {
-				$tax += $i->amount;
-			}
-			$items[] = [
-				'name'      => 'Pajak',
-				'qty'       => 1,
-				'price'     => $tax,
-				'sku'       => 'taxes-cost',
-				'image_url' => ''
-			];
-		}
-
-		if ( strlen( $start_unique_code ) < 2 ) {
-			$start_unique_code = sprintf( '%02d', $start_unique_code );
-		}
-
-		if ( $start_unique_code > $end_unique_code ) {
-			$end_unique_code += 10;
-		}
-
-        $item_price_sum = $order->get_total();
-
-        // foreach($items as $item){
-        //     $item_price_sum += $item['price'];
-        // }
-
-        $unique_code = $with_unique_code ? rand($start_unique_code, $end_unique_code):0;
-
-		if(array_get($moota_settings, "unique_code_type", "increase") == "increase"){
-			$all_total = $item_price_sum + $unique_code;
-		}
-
-		if(array_get($moota_settings, "unique_code_type", "increase") == "decrease"){
-			$all_total = $item_price_sum - $unique_code;
-		}
-
-		$note_code = $with_unique_code ? (new self)->generateRandomString(5):null;
-
-		if($unique_verification == "news"){
-			$unique_code = (new self)->generateRandomString(5);
-
-			$all_total = $item_price_sum;
-		}
-
-        $order->update_meta_data( "bank_id", $channel_id );
-		$order->update_meta_data( "unique_code", $unique_code );
-		$order->update_meta_data( "note_code", $note_code );
-		$order->update_meta_data( "total", $all_total);
-        $order->update_meta_data( "mutation_tag", "{$channel_id}.{$all_total}");
-		$order->update_meta_data( "mutation_note_tag", "{$channel_id}.{$note_code}");
-		
+    public static function request( $order_id, $channel_id, $with_unique_code, $with_admin_fee, $admin_fee_amount, $start_unique_code, $end_unique_code, ? string $bankCode) {
 		try {
-			$item_fee = new \WC_Order_Item_Fee();
 			
-			if(array_get($moota_settings, "unique_code_type", "increase") == "decrease"){
-				$unique_code = $unique_code * -1;
+			global $woocommerce;
+			$order = new WC_Order( $order_id );
+			$account_lists	= get_option("moota_list_accounts", []);
+			$settings = get_option("moota_settings");
+			$status = array_get($settings, 'moota_wc_initiate_status');
+			$bank_list = get_option("moota_list_banks", []);
+			$bank_settings 	= get_option("woocommerce_wc-super-moota-bank-transfer_settings", []);
+
+			if($bankCode) {
+				$bank_settings = get_option('woocommerce_moota_' . strtolower($bankCode) . '_transfer_settings');
+			}
+			
+			$account = array_filter($account_lists, function($bank) use ($channel_id) {
+				return $bank['bank_id'] == $channel_id;
+			});
+
+			foreach ($bank_list as $bank) {
+				if ($bank['bank_id'] === $channel_id) {
+					$bank_logo = $bank['icon']; // Ambil URL logo bank
+					$account_number = $bank['account_number'];
+					break;
+				}
 			}
 
-			$item_fee->set_name( "Kode Unik" ); // Generic fee name
-			$item_fee->set_amount( $unique_code ); // Fee amount
-			$item_fee->set_tax_class( '' ); // default for ''
-			$item_fee->set_tax_status( 'none' ); // or 'none'
-			$item_fee->set_total( $unique_code ); // Fee amount
+			// Jika $account adalah array multidimensi (seperti contoh di var_dump)
+			$accountObject = !empty($account) ? (object) reset($account) : null;
 
-	// 		// Calculating Fee taxes
-	// 		$item_fee->calculate_taxes( $calculate_tax_for );
+			foreach($account as $f_account)
+			{
+				$account = $f_account;
+			}
+	
+			$items = [];
+			/**
+			 * @var $item WC_Order_Item_Product
+			 */
+			foreach ( $order->get_items() as $item ) {
+				$product = wc_get_product( $item->get_product_id() );
+	
+				$image_meta = wp_get_attachment_metadata( $item->get_product_id() );
+				$image_file = get_attached_file( $item->get_product_id(), false );
+	
+				$image_url = empty( $image_meta['original_image'] ) ? $image_file : path_join( dirname( $image_file ), $image_meta['original_image'] );
+	
+				if(empty($image_url)){
+					$image_url = get_the_post_thumbnail_url( $item->get_product_id() );
+				}
+	
+			}
+	
+			if ( $order->get_shipping_total() ) {
+				$items[] = [
+					'name'      => 'Ongkos Kirim',
+					'qty'       => 1,
+					'price'     => $order->get_shipping_total(),
+					'sku'       => 'shipping-cost',
+					'image_url' => ''
+				];
+			}
+	
+			$tax = 0;
+	
+			if ( $order->get_tax_totals() ) {
+				foreach ( $order->get_tax_totals() as $i ) {
+					$tax += $i->amount;
+				}
+				$items[] = [
+					'name'      => 'Pajak',
+					'qty'       => 1,
+					'price'     => $tax,
+					'sku'       => 'taxes-cost',
+					'image_url' => ''
+				];
+			}
+	
+			if(preg_match('/va$/i', $accountObject->bank_type)){
+				$customer = CustomerData::create(
+					$order->get_billing_first_name() . " " .$order->get_billing_last_name(),
+					$order->get_billing_email(),
+					ltrim($order->get_billing_phone(), "+")
+				);
 
-			// Add Fee item to the order
-			$order->add_item( $item_fee );
+				if (empty($_POST['billing_phone'])) {
+					wc_add_notice('Nomor HP wajib diisi untuk pembayaran VA', 'error');
+					return [
+						'result' => 'failure',
+						'refresh' => true
+					];
 
-			## ----------------------------------------------- ##
+				}
 
-			$order->calculate_totals();
-		} catch(\Exception $e){
-			// do nothing
-		}
+				if ((int)WC()->cart->total < 10000) {
+					wc_add_notice('Total Pembayaran dengan Metode VA Harus Senilai Rp10.000 atau Lebih!', 'error');
+					return [
+						'result' => 'failure',
+						'refresh' => true
+					];
+				}
+				
+				try {
+
+					$item_fee = new \WC_Order_Item_Fee();
+					
+					if($with_admin_fee == 'percent') {
+						$item_fees = ($order->get_total() * $admin_fee_amount) / 100;
+					}
+
+					if($with_admin_fee == 'fixed') {
+						$item_fees = (float) $admin_fee_amount;
+					}
+
+					$all_total = $order->get_total() + $item_fees;
 		
+					$item_fee->set_name( "Biaya Admin" ); // Generic fee name
+					$item_fee->set_amount( $item_fees ); // Fee amount
+					$item_fee->set_tax_class( '' ); // default for ''
+					$item_fee->set_tax_status( 'none' ); // or 'none'
+					$item_fee->set_total( $item_fees ); // Fee amount
+		
+					// Add Fee item to the order
+					$order->add_item( $item_fee );
+		
+					## ----------------------------------------------- ##
+		
+					$order->calculate_totals();
+				} catch (Throwable $e) {
+					// Log error untuk item ini dan lanjutkan ke item berikutnya
+					PluginLoader::log_to_file(
+						"VA Payment Field Error - Bank ID {$item['bank_id']}: " . 
+						$e->getMessage() . PHP_EOL .
+						"File: " . $e->getFile() . PHP_EOL .
+						"Line: " . $e->getLine()
+					);
+				}
 
-		$payment_link = self::get_return_url( $order );
+				foreach ($order->get_items() as $item_id => $item) {
+					$product = $item->get_product(); // Dapatkan objek produk
+					
+					// Pastikan produk valid sebelum dimasukkan ke array
+					if ($product && is_a($product, 'WC_Product')) {
+						$items[] = [
+							'name'      => $item->get_name(),
+							'qty'       => $item->get_quantity(),
+							'price'     => $product->get_price(),
+							'sku'       => $product->get_sku() ?? "product", // Default "product" jika SKU kosong
+						];
+					}
+				}
 
-		// Mark as on-hold (we're awaiting the cheque)
-		$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+				$items[] = [
+					'name'		=> "Biaya Admin",
+					'qty'		=> 1,
+					'price'		=> $item_fees ?? 0,
+					'sku'		=> "admin_tax"
+				];
+				
+				try {
+					$create_transaction = CreateTransactionData::create(
+						"",
+						$account['bank_id'], 
+						$customer,
+						$items,
+						$order->get_total(),
+						$account['bank_type'],
+						null,
+						null,
+						null,
+						get_option('woocommerce_hold_stock_minutes', [])
+					);
 
-		// Remove cart
-		$woocommerce->cart->empty_cart();
+					$transaction = MootaApi::createTransaction($create_transaction);
+				
+					// Cek error response
+					if (isset($transaction->errors) && $transaction->status !== 'success') {
+						$errorMessage = $transaction->message ?? 'Terjadi kesalahan validasi';
+						
+						if (!empty($transaction->errors)) {
+							foreach ($transaction->errors as $field => $messages) {
+								$errorMessage .= "\n" . implode("\n", $messages);
+							}
+						}
+						
+						throw new Exception($errorMessage);
+					}
+					MootaWebhook::addLog(
+						"Transaksi berhasil dibuat! Berikut informasi detailnya: \n" . 
+						print_r($transaction, true)
+					);
+				
+					$order->update_meta_data("moota_bank_id", $channel_id);
+					$order->update_meta_data("moota_total", $all_total);
+					$order->update_meta_data("moota_items", $items);
+					$order->update_meta_data("moota_admin_fee", $item_fees);
+					$order->update_meta_data("moota_mutation_tag", "moota_{$transaction->data->va_number}_{$all_total}");
+					$order->update_meta_data("moota_redirect", $transaction->data->payment_url);
+					$order->update_meta_data("moota_va_number", $transaction->data->va_number);
+					$order->update_meta_data('moota_expire_at', $transaction->data->expired_at);
+					$order->update_meta_data('moota_username_bank', $transaction->data->bank_account->username);
+					$order->update_meta_data('moota_icon_url', $transaction->data->bank_account->icon);
+					$order->save();
 
-		// Return thankyou redirect
-		return array(
-			'result'   => 'success',
-			'redirect' => $payment_link
-		);
+					if ($status == 'on-hold') {
+						$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+					} elseif ($status == 'pending') {
+						$order->update_status( 'pending', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+					} else {
+						// Jika nilai status tidak sesuai dengan kondisi di atas, maka Anda dapat melakukan aksi lainnya
+						// Contohnya:
+						$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+					}
+					
+					$woocommerce->cart->empty_cart();
+				
+					return [
+						'result'   => 'success',
+						'redirect' => self::get_return_url($order)
+					];
+				
+				} catch (Exception $e) {
+					// --- TAMBAHKAN RETURN FAILURE DI CATCH ---
+					wc_add_notice("Kolom customer phone wajib diisi jika memilih virtual account", 'error');
+					
+					error_log("Moota API Error: " . $e->getMessage());
+					PluginLoader::log_to_file(
+						"Transaction Error: " . $e->getMessage() . PHP_EOL .
+						print_r($transaction ?? null, true)
+					);
+					
+					// Mark order as failed
+					if ($order) {
+						$order->update_status('failed', $e->getMessage());
+					}
+
+					$woocommerce->cart->empty_cart();
+					
+					return [
+						'result' => 'failure',
+						'refresh' => true
+					];
+				}
+			}
+
+			if ($accountObject->bank_type === "qris") {
+				$customer = CustomerData::create(
+					$order->get_billing_first_name() . " " . $order->get_billing_last_name(),
+					$order->get_billing_email(),
+					ltrim($order->get_billing_phone(), "+")
+				);
+			
+				// Validasi khusus QRIS
+				if (empty($_POST['billing_phone'])) {
+					wc_add_notice('Nomor HP wajib diisi untuk pembayaran QRIS', 'error');
+					return [
+						'result' => 'failure',
+						'refresh' => true
+					];
+				}
+			
+				if ((int)WC()->cart->total < 10000) {
+					wc_add_notice('Total Pembayaran dengan QRIS Harus Senilai Rp10.000 atau Lebih!', 'error');
+					return [
+						'result' => 'failure',
+						'refresh' => true
+					];
+				}
+			
+				try {
+					// Kumpulkan item produk
+					$items = [];
+					foreach ($order->get_items() as $item_id => $item) {
+						$product = $item->get_product();
+						if ($product && is_a($product, 'WC_Product')) {
+							$items[] = [
+								'name'  => $item->get_name(),
+								'qty'   => $item->get_quantity(),
+								'price' => $product->get_price(),
+								'sku'   => $product->get_sku() ?? "product",
+							];
+						}
+					}
+			
+					// Buat transaksi QRIS
+					$create_transaction = CreateTransactionData::create(
+						"",
+						$account['bank_id'],
+						$customer,
+						$items,
+						$order->get_total(),
+						$account['bank_type'],
+						null,
+						null,
+						null,
+						get_option('woocommerce_hold_stock_minutes', [])
+					);
+			
+					$transaction = MootaApi::createTransaction($create_transaction);
+			
+					// Handle error response
+					if (isset($transaction->errors) && $transaction->status !== 'success') {
+						$errorMessage = $transaction->message ?? 'Gagal membuat transaksi QRIS';
+						
+						if (!empty($transaction->errors)) {
+							foreach ($transaction->errors as $field => $messages) {
+								$errorMessage .= "\n" . implode("\n", $messages);
+							}
+						}
+						
+						throw new Exception($errorMessage);
+					}
+			
+					// Simpan metadata khusus QRIS
+					$order->update_meta_data("moota_qris_url", $transaction->data->qr_url);
+					$order->update_meta_data("moota_bank_id", $channel_id);
+					$order->update_meta_data('moota_qris_tag', "moota_qris" . $order->get_total());
+					$order->update_meta_data("moota_expire_at", $transaction->data->expired_at);
+					$order->update_meta_data("moota_bank_details", [
+						'merchant_name' => $transaction->data->merchant_name,
+						'merchant_id'   => $transaction->data->merchant_id
+					]);
+					$order->save();
+			
+					// Log transaksi
+					MootaWebhook::addLog(
+						"Transaksi QRIS berhasil dibuat: \n" . 
+						print_r($transaction, true)
+					);
+
+					if ($status == 'on-hold') {
+						$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+					} elseif ($status == 'pending') {
+						$order->update_status( 'pending', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+					} else {
+						// Jika nilai status tidak sesuai dengan kondisi di atas, maka Anda dapat melakukan aksi lainnya
+						// Contohnya:
+						$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+					}
+			
+					// Kosongkan keranjang
+					WC()->cart->empty_cart();
+			
+					return [
+						'result'   => 'success',
+						'redirect' => self::get_return_url($order)
+					];
+			
+				} catch (Exception $e) {
+					// Handle error
+					wc_add_notice('Gagal memproses pembayaran QRIS: ' . $e->getMessage(), 'error');
+					PluginLoader::log_to_file(
+						"QRIS Error: " . $e->getMessage() . PHP_EOL .
+						print_r($transaction ?? null, true)
+					);
+			
+					if ($order) {
+						$order->update_status('failed', $e->getMessage());
+					}
+			
+					WC()->cart->empty_cart();
+					
+					return [
+						'result' => 'failure',
+						'refresh' => true
+					];
+				}
+			}
+			
+			$end_unique_code = (int)$end_unique_code;
+
+			if ( strlen( $start_unique_code ) < 2 ) {
+				$start_unique_code = (int)sprintf( '%02d', $start_unique_code );
+			}
+	
+			if ( $start_unique_code > $end_unique_code ) {
+				$end_unique_code += 10;
+			}
+	
+			$item_price_sum = $order->get_total();
+
+			if($with_unique_code === "yes"){
+				$unique_code = rand($start_unique_code, $end_unique_code);
+			} else {
+				$unique_code = 0;
+			}
+	
+			if(array_get($bank_settings, "unique_code_type", "increase") == "increase"){
+				$all_total = $item_price_sum + $unique_code;
+			}
+	
+			if(array_get($bank_settings, "unique_code_type", "increase") == "decrease"){
+				$all_total = $item_price_sum - $unique_code;
+			}
+	
+			$note_code = $with_unique_code ? (new self)->generateRandomString(5):null;
+	
+			$order->update_meta_data('wc_total', $item_price_sum);
+			$order->update_meta_data( "moota_bank_id", $channel_id );
+			$order->update_meta_data( "moota_unique_code", $unique_code );
+			$order->update_meta_data( "moota_note_code", $note_code );
+			$order->update_meta_data( "moota_total", $all_total);
+			$order->update_meta_data('moota_bank_logo_url', $bank_logo);
+			$order->update_meta_data('moota_bank_account_number', $account_number);
+			$order->update_meta_data( "moota_mutation_tag", "{$channel_id}.{$all_total}");
+			$order->update_meta_data( "moota_mutation_note_tag", "{$channel_id}.{$note_code}");
+			
+			try {
+				$item_fee = new \WC_Order_Item_Fee();
+				
+				if(array_get($bank_settings, "unique_code_type", "increase") == "decrease"){
+					$unique_code = $unique_code * -1;
+				}
+	
+				$item_fee->set_name( "Kode Unik" ); // Generic fee name
+				$item_fee->set_amount( $unique_code ); // Fee amount
+				$item_fee->set_tax_class( '' ); // default for ''
+				$item_fee->set_tax_status( 'none' ); // or 'none'
+				$item_fee->set_total( $unique_code ); // Fee amount
+	
+				// Add Fee item to the order
+				$order->add_item( $item_fee );
+	
+				## ----------------------------------------------- ##
+	
+				$order->calculate_totals();
+			} catch(Exception $e){
+				
+			}
+			
+	
+			$payment_link = self::get_return_url( $order );
+	
+			// Mark as on-hold (we're awaiting the cheque)
+			if ($status == 'on-hold') {
+				$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+			} elseif ($status == 'pending') {
+				$order->update_status( 'pending', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+			} else {
+				// Jika nilai status tidak sesuai dengan kondisi di atas, maka Anda dapat melakukan aksi lainnya
+				// Contohnya:
+				$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
+			}
+	
+			// Remove cart
+			$woocommerce->cart->empty_cart();
+	
+			// Return thankyou redirect
+			return array(
+				'result'   => 'success',
+				'redirect' => $payment_link
+			);
+		} catch (Exception $e) {
+			
+		}
 	}
 
 	private function generateRandomString($length = 10) {
@@ -166,6 +488,5 @@ class MootaTransaction
 
 		return apply_filters( 'woocommerce_get_return_url', $return_url, $order );
 	}
-
 
 }

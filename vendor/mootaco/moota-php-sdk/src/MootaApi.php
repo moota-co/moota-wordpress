@@ -2,6 +2,8 @@
 
 namespace Moota\Moota;
 
+use Moota\Moota\Data\CreateTransactionData;
+
 class MootaApi
 {
     private static MootaApi $instance;
@@ -19,10 +21,10 @@ class MootaApi
         return self::$instance;
     }
 
-    public static function getAccountList() : ?object
+    public static function getAccountList(int $page = 1) : ?object
     {
         return ApiRequester::get(
-            Config::BASE_URL . Config::ENDPOINT_BANK_INDEX,
+            Config::BASE_URL . Config::ENDPOINT_BANK_INDEX . "?page={$page}",
             Config::$ACCESS_TOKEN
         );
     }
@@ -32,17 +34,6 @@ class MootaApi
         return ApiRequester::get(
             Config::BASE_URL . Config::ENDPOINT_MUTATION_INDEX,
             Config::$ACCESS_TOKEN
-        );
-    }
-
-    public static function attachMutationNote(string $mutation_id, string $message) : ?object
-    {
-        return ApiRequester::post(
-            Config::BASE_URL . \str_replace("{mutation_id}", $mutation_id, Config::ENDPOINT_MUTATION_NOTE),
-            Config::$ACCESS_TOKEN,
-            [
-                "note" => $message
-            ]
         );
     }
 
@@ -72,7 +63,7 @@ class MootaApi
             Config::$ACCESS_TOKEN
         );
     }
-
+    
     public static function createTag(string $name) : ?object
     {
         return ApiRequester::post(
@@ -84,11 +75,15 @@ class MootaApi
         );
     }
 
-    public function __clone()
+    public static function createTransaction(CreateTransactionData $data) : ?object
     {
-    }
+        $settings = get_option("moota_settings", []);
+        $token    = array_get($settings, 'moota_v2_api_key', []);
 
-    public function __wakeup()
-    {
+        return ApiRequester::post(
+            Config::BASE_URL . Config::ENDPOINT_CREATE_TRANSACTION,
+            Config::$ACCESS_TOKEN = $token,
+            CreateTransactionData::transform()
+        );
     }
 }

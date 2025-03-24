@@ -43,3 +43,30 @@
 
 ## [1.0.13] - 2024/05/10
 - Fix Woocommerce bug when decreasing unique code
+
+## [2.0.0] - 2025/03/03
+Fixes   :
+- Mengoptimalisasi Performa Plugin dengan Sistem Cache
+- Memindahkan List Bank Tersedia & Settingan Kode Unik Ke Halaman Payment Settings WooCommerce (Bank Transfer & Virtual Transfer)
+- Security Update
+- Support HPOS & Legacy Penyimpanan Database Order WooCommerce
+
+Feature :
+- Menambahkan Payment Baru Moota - Virtual Account Transfer
+- Menambahkan Payment Baru Moota - QRIS Payment
+- Menambahkan Button Synchronize Banks untuk sinkronisasi Daftar Akun Moota
+- Ketentuan Baru untuk Checkout : Bila menggunakan Payment Virtual account Moota, Customer Wajib Mengisi No.HP
+- Ketentuan Baru untuk Checkout : Bila menggunakan Payment Virtual account Moota, Jumlah Pembelian Customer Harus Melebihi Rp10.000
+- Table List Banks & Accounts   : Memudahkan Cara Baca Daftar List Akun User Moota
+- Mekanik Baru Virtual Transfer : Biaya Admin By Fixed Amount / Percent by Product Price
+- Mekanik Baru Virtual Transfer : Expire At          - Untuk Customize Berapa lama, Bisa di set melalui Settingan WooCommerce Stock Hold
+- Fitur Baru List Akun          : Bank/Account Label - Digunakan Untuk Customize Nama Metode Pembayaran Moota
+
+Deleted :
+- Bank Tersedia Di Halaman Moota Settings (Dipindahkan Ke Halaman Payment Bank/Virtual Transfer Moota)
+- Pengaturan Kode Unik Di Halaman Moota Settings (Dipindahkan Ke Halaman Payment Bank Transfer Moota)
+- Pengaturan Merchant Di Halaman Moota Settings
+- Checkout Message Field Di Halaman Moota Settings (Dipindahkan Ke Halaman Payment Bank/Virtual Transfer Moota)
+- Thanks Order Page Field Di Halaman Moota Settings (Dipindahkan Ke Halaman Payment Bank/Virtual Transfer Moota)
+
+- Edd Support Soon! :D
