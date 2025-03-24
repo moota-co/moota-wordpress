@@ -191,12 +191,13 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
 
     private function is_bank_type_match($bankType)
     {
-        // Hanya match bank_type yang TIDAK diakhiri VA
+        // Cocokkan jika bankType mengandung kode bank, kecuali yang diakhiri "VA"
         return preg_match(
-            '/^' . preg_quote($this->bankCode, '/') . '(?!VA$)/i',
+            '/' . preg_quote($this->bankCode, '/') . '(?!VA$)/i',
             strtolower($bankType)
         );
     }
+    
 
     protected function get_available_banks()
     {
