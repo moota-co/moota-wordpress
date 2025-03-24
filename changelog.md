@@ -70,3 +70,8 @@ Deleted :
 - Thanks Order Page Field Di Halaman Moota Settings (Dipindahkan Ke Halaman Payment Bank/Virtual Transfer Moota)
 
 - Edd Support Soon! :D
+
+## [2.0.1] - 2025/03/24
+Fixes : 
+- Fix bug dimana ibbiz BRI bukan bagian dari Bank BRI
+- Fix bug Dimana jika ada transaksi seharga Rp10000 dan Sedang dalam mode prod. Tidak mengreturn "OK (Test Webhook)"
