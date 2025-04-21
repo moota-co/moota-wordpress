@@ -131,6 +131,11 @@ class PluginLoader
 	public function register_setting_page() : void
 	{
 		$settings = new WPSettings(__('Moota Settings'));
+		$moota_settings = get_option('moota_settings', []);
+
+		$submitted_checkout = isset($_POST['moota_settings']['moota_custom_checkout_redirect'])
+        ? sanitize_text_field($_POST['moota_settings']['moota_custom_checkout_redirect'])
+        : array_get($moota_settings, 'moota_custom_checkout_redirect', 'whitelable');
 		
 		$settings->set_menu_icon(plugin_dir_url( MOOTA_FULL_PATH ) . 'assets/img/icon-moota-small-2.png');
 
@@ -214,6 +219,64 @@ class PluginLoader
 					"pending" => "Pending Payment"
 				]
 			]);
+			$wc_general_section->add_option("select", [
+				"name" => "moota_custom_checkout_redirect",
+				"label" => "Custom Checkout Redirect",
+				"options" => [
+					'whitelable' 	=> "Gunakan Checkout WooCommerce",
+					'moota'			=> "Gunakan Checkout Moota"
+				],
+				"description" => "<strong>Redirect Checkout </strong>: Ketika melakukan Order, Kamu bisa Pilih ingin tetap Menggunakan Checkout dari <strong>WooCommerce</strong> atau Checkout dari <strong>Moota</strong>"
+			]);
+			if($submitted_checkout == 'moota'){
+				$wc_general_section->add_option("select", [
+					"name" => "moota_failed_redirect_url",
+					"label" => "Failed Payment Redirect URL",
+					"options" => [
+						'thanks_page' => "Ke Halaman Thanks Page (Default WooCommerce)",
+						'last_visited' => "Ke Halaman Terakhir Dikunjungi",
+						'Detail Produk' => "Menuju Detail Produk",
+					]
+				]);
+				$wc_general_section->add_option("select", [
+					"name" => "moota_pending_redirect_url",
+					"label" => "New Order Payment Redirect URL",
+					"options" => [
+						'thanks_page' => "Ke Halaman Thanks Page (Default WooCommerce)",
+						'last_visited' => "Ke Halaman Terakhir Dikunjungi",
+						'Detail Produk' => "Menuju Detail Produk",
+					]
+				]);
+				$wc_general_section->add_option("select", [
+					"name" => "moota_success_redirect_url",
+					"label" => "Success Payment Redirect URL",
+					"options" => [
+						'thanks_page' => "Ke Halaman Thanks Page (Default WooCommerce)",
+						'last_visited' => "Ke Halaman Terakhir Dikunjungi",
+						'Detail Produk' => "Menuju Detail Produk",
+					],
+					"description" => "
+						<div style='font-size: 14px; line-height: 1.6;'>
+							<p>Pilih halaman yang ingin dituju setelah pembayaran :</p>
+							<ul style='list-style-type: disc; margin-left: 20px;'>
+								<li>
+									<strong>Ke Halaman Thanks Page (Default WooCommerce):</strong>
+									<br>Mengarahkan pelanggan ke halaman terima kasih default WooCommerce. Halaman ini memberikan konfirmasi bahwa pesanan mereka telah diterima, meskipun pembayaran gagal.
+								</li>
+								<li>
+									<strong>Ke Halaman Terakhir Dikunjungi:</strong>
+									<br>Mengarahkan pelanggan kembali ke halaman terakhir yang mereka kunjungi. Ini membantu mereka untuk melanjutkan pengalaman berbelanja mereka tanpa kehilangan jejak.
+								</li>
+								<li>
+									<strong>Menuju Detail Produk:</strong>
+									<br>Mengarahkan pelanggan ke halaman detail produk. Ini memberikan kesempatan untuk melihat kembali produk yang mereka coba beli dan mungkin memotivasi mereka untuk mencoba melakukan pembayaran lagi.<br>
+									<p style='color: red;'>Warning! Ketika Produknya melebihi 1 Jenis Produk, Maka akan dipindahkan ke halaman Store Utama</p>
+								</li>
+							</ul>
+						</div>
+					"
+				]);
+			}
 		}
 		$settings->make();
 	}

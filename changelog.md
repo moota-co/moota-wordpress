@@ -75,3 +75,15 @@ Deleted :
 Fixes : 
 - Fix bug dimana ibbiz BRI bukan bagian dari Bank BRI
 - Fix bug Dimana jika ada transaksi seharga Rp10000 dan Sedang dalam mode prod. Tidak mengreturn "OK (Test Webhook)"
+
+## [2.0.2] - 2025/04/15
+Feature :
+- Menambahkan Fitur Checkout Moota : Ingin Tampilan Checkout Yang lebih Flexible dan Simple? Kini Fitur Redirect Checkout Moota Telah Hadir! Sekarang Sobat udah bisa pakai Checkout WooCommerce kalian menggunakan Fitur Checkout dari Moota!
+- Menambahkan 3 Opsi Yang hanya bisa dijalankan Ketika menggunakan fitur Checkout dari Moota (Redirect per Status) : Kembali Ke Detail Produk, Kembali ke Halaman Sebelumnya dan Kembali Ke Halaman Thanks Page.
+- Metode Bank Transfer sekarang menggunakan API Checkout Dari Moota.
+
+Fix :
+- Fix Dimana Harga Order berbeda dengan Jumlah Total Items Ketika Membuat Sebuah Transaksi dengan Metode Bank Transfer.
+
+Requirement :
+- Versi PHP Minimal dari 7.4 -> 8.x

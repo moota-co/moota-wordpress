@@ -391,17 +391,57 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
         $order = wc_get_order($order_id);
         $selectedBankId = $this->get_option('account');
         $selectedBank = $this->get_selected_bank($selectedBankId);
+        $moota_settings = get_option('moota_settings', []);
 
         // Validasi bank yang dipilih
         if (!$selectedBank || !$this->is_bank_type_match($selectedBank['bank_type'])) {
             throw new Exception('Rekening tidak valid atau tidak sesuai dengan tipe gateway');
         }
+        
+        // Ambil redirect setting dari admin
+    $failed_option  = array_get($moota_settings, 'moota_failed_redirect_url');
+    $pending_option = array_get($moota_settings, 'moota_pending_redirect_url');
+    $success_option = array_get($moota_settings, 'moota_success_redirect_url');
 
-        // Simpan data bank ke order
-        $order->update_meta_data('moota_bank_id', $selectedBankId);
-        $order->update_meta_data('moota_bank_details', $selectedBank);
+    // Ambil referer jika tersedia
+    $referer = $_SERVER['HTTP_REFERER'] ?? home_url();
+
+    // URL detail produk (misalnya produk pertama dari order)
+    $items = $order->get_items();
+
+    if (count($items) > 1) {
+        // Redirect ke halaman shop jika lebih dari 1 produk
+        $product_url = wc_get_page_permalink('shop');
+    } else {
+        // Redirect ke halaman produk jika hanya 1
+        $first_product = reset($items);
+        $product_url = get_permalink($first_product->get_product_id());
+    }
+    $first_product = reset($items);
+
+    // Mapping setting ke URL
+    $failed_redirect = match ($failed_option) {
+        'last_visited' => $referer,
+        'Detail Produk' => $product_url,
+        'thanks_page' => $order->get_checkout_order_received_url(),
+    };
+
+    $pending_redirect = match ($pending_option) {
+        'last_visited' => $referer,
+        'Detail Produk' => $product_url,
+        'thanks_page' => $order->get_checkout_order_received_url(),
+    };
+
+    $success_redirect = match ($success_option) {
+        'last_visited' => $referer,
+        'Detail Produk' => $product_url,
+        'thanks_page' => $order->get_checkout_order_received_url(),
+    };
 
         return MootaTransaction::request(
+            $failed_redirect,
+            $pending_redirect,
+            $success_redirect,
             $order_id,
             $selectedBankId,
             "",
@@ -465,6 +505,10 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
     </svg>
 </button>';
         echo '</td>';
+        echo '</tr>';
+        echo '<tr class="payment_status">';
+        echo '<th scope="row" style="font-weight: 700;">' . __('Payment Status', 'textdomain') . '</th>';
+        echo '<td style="font-weight: 700;">' . $status_label . '</td>';
         echo '</tr>';
         ?>
 <?php

@@ -12,11 +12,12 @@ use WC_Customer;
 
 class MootaTransaction
 {
-    public static function request( $order_id, $channel_id, $with_unique_code, $with_admin_fee, $admin_fee_amount, $start_unique_code, $end_unique_code, ? string $bankCode) {
+    public static function request( $failed_redirect, $pending_redirect, $success_redirect, $order_id, $channel_id, $with_unique_code, $with_admin_fee, $admin_fee_amount, $start_unique_code, $end_unique_code, ? string $bankCode) {
 		try {
 			
 			global $woocommerce;
 			$order = new WC_Order( $order_id );
+			$payment_link = self::get_return_url($order);
 			$account_lists	= get_option("moota_list_accounts", []);
 			$settings = get_option("moota_settings");
 			$status = array_get($settings, 'moota_wc_initiate_status');
@@ -48,6 +49,7 @@ class MootaTransaction
 			}
 	
 			$items = [];
+			$product_names = []; // Array to hold product names
 			/**
 			 * @var $item WC_Order_Item_Product
 			 */
@@ -161,6 +163,7 @@ class MootaTransaction
 							'price'     => $product->get_price(),
 							'sku'       => $product->get_sku() ?? "product", // Default "product" jika SKU kosong
 						];
+						$product_names[] = $item->get_name();
 					}
 				}
 
@@ -171,18 +174,23 @@ class MootaTransaction
 					'sku'		=> "admin_tax"
 				];
 				
+				$product_names_string = implode(', ', $product_names);
+				
 				try {
 					$create_transaction = CreateTransactionData::create(
-						"",
+						"moota-va#{$order_id}",
 						$account['bank_id'], 
 						$customer,
 						$items,
 						$order->get_total(),
 						$account['bank_type'],
 						null,
-						null,
-						null,
-						get_option('woocommerce_hold_stock_minutes', [])
+						"Order From WooCommerce, Products : {$product_names_string}",
+						$pending_redirect,
+						get_option('woocommerce_hold_stock_minutes', []),
+						false,
+						!empty($success_redirect) ? $success_redirect : $pending_redirect,
+						!empty($failed_redirect) ? $failed_redirect : $pending_redirect
 					);
 
 					$transaction = MootaApi::createTransaction($create_transaction);
@@ -214,6 +222,9 @@ class MootaTransaction
 					$order->update_meta_data('moota_expire_at', $transaction->data->expired_at);
 					$order->update_meta_data('moota_username_bank', $transaction->data->bank_account->username);
 					$order->update_meta_data('moota_icon_url', $transaction->data->bank_account->icon);
+					$order->update_meta_data('moota_failed_merchant_url', $failed_redirect);
+					$order->update_meta_data('moota_pending_merchant_url', $pending_redirect);
+					$order->update_meta_data('moota_success_merchant_url', $success_redirect);
 					$order->save();
 
 					if ($status == 'on-hold') {
@@ -227,10 +238,14 @@ class MootaTransaction
 					}
 					
 					$woocommerce->cart->empty_cart();
+
+					if(array_get($settings, 'moota_custom_checkout_redirect') == "moota"){
+						$payment_link = $order->get_meta('moota_redirect');
+					}
 				
 					return [
 						'result'   => 'success',
-						'redirect' => self::get_return_url($order)
+						'redirect' => !empty($payment_link) ? $payment_link : self::get_return_url($order)
 					];
 				
 				} catch (Exception $e) {
@@ -293,21 +308,27 @@ class MootaTransaction
 								'price' => $product->get_price(),
 								'sku'   => $product->get_sku() ?? "product",
 							];
+							$product_names[] = $item->get_name();
 						}
 					}
+
+					$product_names_string = implode(', ', $product_names);
 			
 					// Buat transaksi QRIS
 					$create_transaction = CreateTransactionData::create(
-						"",
-						$account['bank_id'],
+						"moota-qris#{$order_id}",
+						$account['bank_id'], 
 						$customer,
 						$items,
 						$order->get_total(),
 						$account['bank_type'],
 						null,
-						null,
-						null,
-						get_option('woocommerce_hold_stock_minutes', [])
+						"Order From WooCommerce, Products : {$product_names_string}",
+						$pending_redirect,
+						get_option('woocommerce_hold_stock_minutes', []),
+						false,
+						!empty($success_redirect) ? $success_redirect : $pending_redirect,
+						!empty($failed_redirect) ? $failed_redirect : $pending_redirect
 					);
 			
 					$transaction = MootaApi::createTransaction($create_transaction);
@@ -327,6 +348,7 @@ class MootaTransaction
 			
 					// Simpan metadata khusus QRIS
 					$order->update_meta_data("moota_qris_url", $transaction->data->qr_url);
+					$order->update_meta_data("moota_redirect", $transaction->data->payment_url);
 					$order->update_meta_data("moota_bank_id", $channel_id);
 					$order->update_meta_data('moota_qris_tag', "moota_qris" . $order->get_total());
 					$order->update_meta_data("moota_expire_at", $transaction->data->expired_at);
@@ -334,6 +356,9 @@ class MootaTransaction
 						'merchant_name' => $transaction->data->merchant_name,
 						'merchant_id'   => $transaction->data->merchant_id
 					]);
+					$order->update_meta_data('moota_failed_merchant_url', $failed_redirect);
+					$order->update_meta_data('moota_pending_merchant_url', $pending_redirect);
+					$order->update_meta_data('moota_success_merchant_url', $success_redirect);
 					$order->save();
 			
 					// Log transaksi
@@ -354,10 +379,14 @@ class MootaTransaction
 			
 					// Kosongkan keranjang
 					WC()->cart->empty_cart();
-			
+
+					if(array_get($settings, 'moota_custom_checkout_redirect') == "moota"){
+						$payment_link = $order->get_meta('moota_redirect');
+					}
+
 					return [
 						'result'   => 'success',
-						'redirect' => self::get_return_url($order)
+						'redirect' => !empty($payment_link) ? $payment_link : self::get_return_url($order)
 					];
 			
 				} catch (Exception $e) {
@@ -408,16 +437,31 @@ class MootaTransaction
 			}
 	
 			$note_code = $with_unique_code ? (new self)->generateRandomString(5):null;
-	
-			$order->update_meta_data('wc_total', $item_price_sum);
-			$order->update_meta_data( "moota_bank_id", $channel_id );
-			$order->update_meta_data( "moota_unique_code", $unique_code );
-			$order->update_meta_data( "moota_note_code", $note_code );
-			$order->update_meta_data( "moota_total", $all_total);
-			$order->update_meta_data('moota_bank_logo_url', $bank_logo);
-			$order->update_meta_data('moota_bank_account_number', $account_number);
-			$order->update_meta_data( "moota_mutation_tag", "{$channel_id}.{$all_total}");
-			$order->update_meta_data( "moota_mutation_note_tag", "{$channel_id}.{$note_code}");
+
+			foreach ($order->get_items() as $item_id => $item) {
+				$product = $item->get_product(); // Dapatkan objek produk
+				
+				// Pastikan produk valid sebelum dimasukkan ke array
+				if ($product && is_a($product, 'WC_Product')) {
+					$items[] = [
+						'name'      => $item->get_name(),
+						'qty'       => $item->get_quantity(),
+						'price'     => $product->get_price(),
+						'sku'       => $product->get_sku() ?? "product", // Default "product" jika SKU kosong
+					];
+					$product_names[] = $item->get_name();
+				}
+			}
+
+			$product_names_string = implode(', ', $product_names);
+
+			$customer = CustomerData::create(
+				$order->get_billing_first_name() . " " .$order->get_billing_last_name(),
+				$order->get_billing_email(),
+				ltrim($order->get_billing_phone(), "+")
+			);
+
+			
 			
 			try {
 				$item_fee = new \WC_Order_Item_Fee();
@@ -431,7 +475,7 @@ class MootaTransaction
 				$item_fee->set_tax_class( '' ); // default for ''
 				$item_fee->set_tax_status( 'none' ); // or 'none'
 				$item_fee->set_total( $unique_code ); // Fee amount
-	
+				
 				// Add Fee item to the order
 				$order->add_item( $item_fee );
 	
@@ -441,9 +485,50 @@ class MootaTransaction
 			} catch(Exception $e){
 				
 			}
-			
+
+			$items[] = [
+				'name'		=> "Kode Unik",
+				'qty'		=> 1,
+				'price'		=> $item_fee->get_total() ?? 0,
+				'sku'		=> "unique_code"
+			];
+
+			$create_transaction = CreateTransactionData::create(
+							"moota-bank-transfer#{$order_id}",
+							$account['bank_id'], 
+							$customer,
+							$items,
+							$order->get_total(),
+							$account['bank_type'],
+							null,
+							"Order From WooCommerce, Products : {$product_names_string}",
+							$pending_redirect,
+							get_option('woocommerce_hold_stock_minutes', []),
+							false,
+							!empty($success_redirect) ? $success_redirect : $pending_redirect,
+							!empty($failed_redirect) ? $failed_redirect : $pending_redirect
+						);
 	
-			$payment_link = self::get_return_url( $order );
+				$transaction = MootaApi::createTransaction($create_transaction);
+
+				MootaWebhook::addLog(
+					"Transaksi Bank Transfer berhasil dibuat: \n" . 
+					print_r($transaction, true)
+				);
+
+			$order->update_meta_data('wc_total', $item_price_sum);
+			$order->update_meta_data( "moota_bank_id", $channel_id );
+			$order->update_meta_data( "moota_unique_code", $unique_code );
+			$order->update_meta_data( "moota_note_code", $note_code );
+			$order->update_meta_data( "moota_total", $all_total);
+			$order->update_meta_data('moota_bank_logo_url', $bank_logo);
+			$order->update_meta_data('moota_bank_account_number', $account_number);
+			$order->update_meta_data( "moota_mutation_tag", "{$channel_id}.{$all_total}");
+			$order->update_meta_data("moota_redirect", $transaction->data->payment_url);
+			$order->update_meta_data( "moota_mutation_note_tag", "{$channel_id}.{$note_code}");
+			$order->update_meta_data('moota_failed_merchant_url', $failed_redirect);
+			$order->update_meta_data('moota_pending_merchant_url', $pending_redirect);
+			$order->update_meta_data('moota_success_merchant_url', $success_redirect);
 	
 			// Mark as on-hold (we're awaiting the cheque)
 			if ($status == 'on-hold') {
@@ -455,14 +540,18 @@ class MootaTransaction
 				// Contohnya:
 				$order->update_status( 'on-hold', __( 'Awaiting Payment', 'woocommerce-gateway-moota' ) );
 			}
-	
+
 			// Remove cart
 			$woocommerce->cart->empty_cart();
+
+			if(array_get($settings, 'moota_custom_checkout_redirect') == "moota"){
+						$payment_link = $order->get_meta('moota_redirect');
+					}
 	
 			// Return thankyou redirect
 			return array(
 				'result'   => 'success',
-				'redirect' => $payment_link
+				'redirect' => !empty($payment_link) ? $payment_link : self::get_return_url($order)
 			);
 		} catch (Exception $e) {
 			
