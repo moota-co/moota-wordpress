@@ -6,7 +6,7 @@ use Moota\MootaSuperPlugin\Concerns\MootaPayment;
 use WP_REST_Response;
 
 class MootaWebhook {
-	private static $filename = 'mutasi-log';
+	private static $filename = 'mutasi.log';
 	private static $callback_name = 'moota-callback';
 
 	public function __construct() {
