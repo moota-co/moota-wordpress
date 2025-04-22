@@ -34,18 +34,11 @@ class ComposerStaticInitd8146a8bcc61cec9ec52b95ee5a12827
         'M' => 
         array (
             'Moota\\Moota\\' => 12,
-            'Moota\\MootaSuperPlugin\\Woocommerce\\VirtualAccount\\' => 50,
-            'Moota\\MootaSuperPlugin\\Woocommerce\\BankTransfer\\' => 48,
             'Moota\\MootaSuperPlugin\\' => 23,
         ),
         'J' => 
         array (
             'Jeffreyvr\\WPSettings\\' => 21,
-        ),
-        'D' => 
-        array (
-            'Doctrine\\Deprecations\\' => 22,
-            'Doctrine\\DBAL\\' => 14,
         ),
         'A' => 
         array (
@@ -94,14 +87,6 @@ class ComposerStaticInitd8146a8bcc61cec9ec52b95ee5a12827
         array (
             0 => __DIR__ . '/..' . '/mootaco/moota-php-sdk/src',
         ),
-        'Moota\\MootaSuperPlugin\\Woocommerce\\VirtualAccount\\' => 
-        array (
-            0 => __DIR__ . '/../..' . '/src/Woocommerce/VirtualAccount',
-        ),
-        'Moota\\MootaSuperPlugin\\Woocommerce\\BankTransfer\\' => 
-        array (
-            0 => __DIR__ . '/../..' . '/src/Woocommerce/BankTransfer',
-        ),
         'Moota\\MootaSuperPlugin\\' => 
         array (
             0 => __DIR__ . '/../..' . '/src',
@@ -109,14 +94,6 @@ class ComposerStaticInitd8146a8bcc61cec9ec52b95ee5a12827
         'Jeffreyvr\\WPSettings\\' => 
         array (
             0 => __DIR__ . '/..' . '/jeffreyvanrossum/wp-settings/src',
-        ),
-        'Doctrine\\Deprecations\\' => 
-        array (
-            0 => __DIR__ . '/..' . '/doctrine/deprecations/src',
-        ),
-        'Doctrine\\DBAL\\' => 
-        array (
-            0 => __DIR__ . '/..' . '/doctrine/dbal/src',
         ),
         'Adbar\\' => 
         array (

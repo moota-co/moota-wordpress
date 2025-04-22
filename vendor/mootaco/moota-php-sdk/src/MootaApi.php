@@ -3,6 +3,7 @@
 namespace Moota\Moota;
 
 use Moota\Moota\Data\CreateTransactionData;
+use Moota\MootaSuperPlugin\Contracts\MootaWebhook;
 
 class MootaApi
 {
@@ -22,12 +23,52 @@ class MootaApi
     }
 
     public static function getAccountList(int $page = 1) : ?object
-    {
-        return ApiRequester::get(
-            Config::BASE_URL . Config::ENDPOINT_BANK_INDEX . "?page={$page}",
-            Config::$ACCESS_TOKEN
-        );
-    }
+{
+    $endpoint = Config::BASE_URL . Config::ENDPOINT_BANK_INDEX . "?page=$page";
+    
+    // Inisialisasi cURL
+    $ch = curl_init($endpoint);
+    
+    // Set option untuk mengembalikan hasil sebagai string
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . Config::$ACCESS_TOKEN
+    ]);
+    
+    // Eksekusi cURL
+    $response = curl_exec($ch);
+    
+    // Dapatkan informasi tentang request
+    $info = curl_getinfo($ch);
+    
+    // Tutup cURL
+    curl_close($ch);
+    
+    // Logging hasil request
+    $log = [
+        'request' => [
+            'url' => $info['url'],
+            'method' => $info['request_method'],
+            'headers' => $info['request_header'],
+        ],
+        'response' => [
+            'status' => $info['http_code'],
+            'body' => $response,
+        ]
+    ];
+    
+    // Simpan log ke file
+    $log_path = 'moota_api_request.log';
+    MootaWebhook::addLog(
+        "Transaksi Bank Transfer berhasil dibuat: \n" . 
+        print_r($log, true)
+    );
+    
+    // Decode response JSON
+    $result = json_decode($response);
+    
+    return $result;
+}
 
     public static function getMutationList(?string $bank_id = null) : ?object
     {
