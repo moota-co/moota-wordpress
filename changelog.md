@@ -87,3 +87,12 @@ Fix :
 
 Requirement :
 - Versi PHP Minimal dari 7.4 -> 8.x
+
+## [2.1.0] - 2025/04/22
+Feature :
+- Mengganti Sistem Caching dari Doctrine (Library luar) ke Transients (Bawaan Wordpress)
+
+Fixes :
+- Fix bug Dimana Plugin Membutuhkan Versi 8.x Keatas (Versi 7.x bisa gunakan kembali)
+- Fix Bug Dimana jika Settings Redirect Optionnya Belum Pernah Diedit, Maka Akan Mengreturn Error saat memilih Payment Method Moota
+- Fix Bug Dimana EDD untuk Rupiah IDR Currency Tidak Muncul

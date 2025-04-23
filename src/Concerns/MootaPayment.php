@@ -1,12 +1,10 @@
 <?php
 
 namespace Moota\MootaSuperPlugin\Concerns;
+
+use Exception;
 use Moota\Moota\Config;
 use Moota\Moota\MootaApi;
-use Doctrine\DBAL\DriverManager;
-use Doctrine\DBAL\Exception;
-use Symfony\Component\Cache\Adapter\DoctrineDbalAdapter;
-use Symfony\Contracts\Cache\ItemInterface;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly
@@ -18,35 +16,17 @@ class MootaPayment
 
     public function __construct(?string $access_token = null)
     {
-
         Config::$ACCESS_TOKEN = $access_token;
-        
         $this->access_token = $access_token;
     }
 
     public function clearCache(): void
     {
         try {
-            $db_user = DB_USER;
-            $db_password = DB_PASSWORD;
-            $db_host = DB_HOST;
-            $db_name = DB_NAME;
-
-            $connection = DriverManager::getConnection([
-            'driver' => 'pdo_mysql', // Tambahkan driver
-            'user' => $db_user,
-            'password' => $db_password,
-            'host' => $db_host,
-            'dbname' => $db_name,
-            ]); // Sama seperti di getBanks()
-            $cache = new DoctrineDbalAdapter($connection, 'cache', 0);
-
-            // Hapus cache banks dan accounts
-            $cache->deleteItem('moota-bank-account-lists');
-            $cache->deleteItem('moota-account-lists');
-
-            // Hapus juga cache token untuk memastikan data benar-benar fresh
-            $cache->deleteItem('moota_stored_access_token');
+            // Hapus semua transient yang terkait
+            delete_transient('moota-bank-account-lists');
+            delete_transient('moota-account-lists');
+            delete_transient('moota_stored_access_token');
         } catch (Exception $e) {
             error_log("Gagal menghapus cache: " . $e->getMessage());
         }
@@ -63,7 +43,7 @@ class MootaPayment
         MootaApi::attachMutationTag($mutation_id, [$merchant]);
     }
 
-    public function getBanks(bool $forceRefresh = false) : ?array
+    public function getBanks(bool $forceRefresh = false)
 {
     if (empty($this->access_token)) {
         return null;
@@ -74,74 +54,46 @@ class MootaPayment
     }
 
     try {
-        // Dapatkan nilai koneksi database dari WordPress
-        $db_user = DB_USER;
-        $db_password = DB_PASSWORD;
-        $db_host = DB_HOST;
-        $db_name = DB_NAME;
-
-        // Buat koneksi database menggunakan Doctrine DBAL
-        $connection = DriverManager::getConnection([
-            'driver' => 'pdo_mysql', // Tambahkan driver
-            'user' => $db_user,
-            'password' => $db_password,
-            'host' => $db_host,
-            'dbname' => $db_name,
-        ]);
-
-        // Buat instance DoctrineDbalAdapter
-        $cache = new DoctrineDbalAdapter(
-            $connection, // Koneksi database
-            'cache',
-            0 
-        );
-
-        // Dapatkan access token yang tersimpan sebelumnya
-        $stored_token_item = $cache->getItem('moota_stored_access_token');
-
+        // Dapatkan access token yang tersimpan
+        $stored_token = get_transient('moota_stored_access_token');
+        
         // Jika access token berubah, hapus cache sebelumnya
-        if (!$stored_token_item->isHit() || $stored_token_item->get() !== $this->access_token) {
-            // Hapus cache yang ada
-            $cache->deleteItem("moota-bank-account-lists");
-            $cache->deleteItem("moota-account-lists");
-            
-            // Simpan access token baru
-            $stored_token_item->set($this->access_token);
-            $cache->save($stored_token_item);
+        if (!$stored_token || $stored_token !== $this->access_token) {
+            $this->clearCache();
+            set_transient('moota_stored_access_token', $this->access_token, DAY_IN_SECONDS);
         }
 
         // Ambil data dari cache atau API
-        $response = $cache->get("moota-bank-account-lists", function(ItemInterface $item) {
+        $response = get_transient('moota-bank-account-lists');
+        if (false === $response) {
             $allData = [];
             $currentPage = 1;
             $totalPages = 1;
         
             do {
-                // Ambil data per halaman
                 $response = MootaApi::getAccountList($currentPage);
-        
+
                 if (!isset($response->data)) break;
-        
+
                 // Gabungkan data dari semua halaman
                 $allData = array_merge($allData, $response->data);
-                $totalPages = $response->last_page ?? 1;
+                $totalPages = $response->last_page ?? 1; // Ambil total halaman dari respons
                 $currentPage++;
             } while ($currentPage <= $totalPages);
         
-            // Simpan semua data ke cache dalam satu entri
-            $item->expiresAfter((60 * 60) * 5);
-            return (object) [
+            // Simpan semua data ke transient
+            set_transient('moota-bank-account-lists', (object) [
                 'data' => $allData,
                 'total' => count($allData)
-            ];
-        });
+            ], 5 * HOUR_IN_SECONDS); // 5 jam
+        }
 
         // Jika data tetap tidak ditemukan, kembalikan null
         if (!isset($response->data)) {
             return null;
         }
 
-        return $response->data;
+        return $allData; // Pastikan ini mengembalikan semua data yang telah digabungkan
 
     } catch (Exception $e) {
         // Tangani error yang mungkin terjadi
@@ -184,14 +136,10 @@ class MootaPayment
         }
 
         if(!$count){
-
             MootaApi::createTag($name);
-
-            return true;
         }
 
         return true;
-
     }
 
     public function attachTransactionId(string $mutation_id, ?string $transaction_id)
@@ -227,7 +175,6 @@ class MootaPayment
         $match_count = 0;
 
         foreach((array)$mutations->data as $real_mutation){
-
             if(
                 $real_mutation->mutation_id == $mutation['mutation_id'] && 
                 $real_mutation->amount == $mutation['amount'] &&
@@ -235,7 +182,6 @@ class MootaPayment
             ){
                 $match_count++;
             }
-
         }
 
         if($match_count == 0){
@@ -273,14 +219,12 @@ class MootaPayment
     private function writeLog(string $filename, ?array $data)
     {
         $path = MOOTA_LOGS_PATH."/{$filename}";
-
         file_put_contents($path, json_encode($data));
     }
 
     private function getLog($filename) : ?array
     {
         $path = MOOTA_LOGS_PATH."/{$filename}";
-
         $data = file_get_contents($path);
 
         if(empty($data)){
@@ -289,5 +233,4 @@ class MootaPayment
 
         return json_decode($data, true);
     }
-
 }

@@ -59,6 +59,11 @@ class PluginLoader
 			add_filter( 'woocommerce_payment_gateways', [ $this, 'add_moota_gateway_class' ] );
 		}
 
+		if( function_exists( 'EDD' ) ){
+
+			EDDMootaBankTransfer::getInstance();
+		}
+
         add_action('wp_enqueue_scripts', [$this, 'front_end_scripts']);
 
 		MootaWebhook::init();

@@ -492,7 +492,7 @@ class MootaTransaction
 				'price'		=> $item_fee->get_total() ?? 0,
 				'sku'		=> "unique_code"
 			];
-
+			
 			$create_transaction = CreateTransactionData::create(
 							"moota-bank-transfer#{$order_id}",
 							$account['bank_id'], 
