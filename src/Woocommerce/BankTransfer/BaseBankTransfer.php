@@ -315,7 +315,7 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
 
         foreach ($listSettings as $bank) {
             if ($bank['bank_id'] === $bankId) {
-                $username = $bank['username'];
+                $username = $bank['atas_nama'];
                 break; // Keluar dari loop setelah menemukan bank yang sesuai
             }
         }
@@ -471,7 +471,7 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
         }
         $data = [
             'account_number' => $bank['account_number'],
-            'account_holder' => $bank['username'],
+            'account_holder' => $bank['atas_nama'],
             'bank_logo'      => "<img src='".$bank['icon']."'>",
             'unique_code'    => "<span class='font-bold'>".$order->get_meta('moota_unique_code')."</span>",
             'bank_name'      => $this->bankCode,
