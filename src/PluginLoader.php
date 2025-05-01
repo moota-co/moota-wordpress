@@ -8,6 +8,9 @@ use Moota\MootaSuperPlugin\Concerns\MootaPayment;
 use Moota\MootaSuperPlugin\Contracts\MootaWebhook;
 use Jeffreyvr\WPSettings\WPSettings;
 use Moota\MootaSuperPlugin\EDD\EDDMootaBankTransfer;
+use Moota\MootaSuperPlugin\EDD\EDDMootaQRISTransfer;
+use Moota\MootaSuperPlugin\EDD\EDDMootaVirtualTransfer;
+use Moota\MootaSuperPlugin\EDD\Settings\EDDMootaSettings;
 use Moota\MootaSuperPlugin\Options\WebhookOption;
 use Moota\MootaSuperPlugin\Woocommerce\QRIS\QRISGateway;
 
@@ -57,6 +60,14 @@ class PluginLoader
 
 		if ( class_exists( 'WooCommerce' ) ) {
 			add_filter( 'woocommerce_payment_gateways', [ $this, 'add_moota_gateway_class' ] );
+		}
+
+		if( function_exists( 'EDD' ) ){
+
+			EDDMootaBankTransfer::getInstance();
+			EDDMootaVirtualTransfer::getInstance();
+			EDDMootaQRISTransfer::getInstance();
+			EDDMootaSettings::getInstance();
 		}
 
         add_action('wp_enqueue_scripts', [$this, 'front_end_scripts']);
@@ -277,6 +288,29 @@ class PluginLoader
 					"
 				]);
 			}
+		}
+
+		if (function_exists('EDD')) {
+			$wc_tab = $settings->add_tab("EDD");
+
+			$wc_general_section = $wc_tab->add_section("Pengaturan Umum");
+
+			$wc_general_section->add_option("select", [
+				"name" => "moota_edd_success_status",
+				"label" => "Status Pesanan Ketika Sudah Dibayar",
+				"options" => [
+					'pending'    => 'Pending',
+    				'processing' => 'Processing', // kadang digunakan oleh ekstensi tertentu
+    				'publish'    => 'Complete',   // ini artinya "completed" / berhasil
+    				'revoked'    => 'Revoked',
+    				'cancelled'  => 'Cancelled',
+    				'failed'     => 'Failed',
+    				'refunded'   => 'Refunded',
+    				'abandoned'  => 'Abandoned',
+    				'preapproval' => 'Preapproval'
+				]
+			]);
+
 		}
 		$settings->make();
 	}

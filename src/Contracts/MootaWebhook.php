@@ -262,8 +262,7 @@ class MootaWebhook {
 	{
 		global $wpdb;
 		$moota_settings = get_option("moota_settings", []);
-
-		$unique_verification = array_get($moota_settings, "unique_code_verification_type", "nominal");
+		$paid_status = array_get($moota_settings, 'moota_edd_success_status', []);
 
 		if(self::updateEDDUniqueNote($mutations)){
 			return;
@@ -271,28 +270,66 @@ class MootaWebhook {
 
 		foreach( $mutations as $mutation) {
 
-			$sql = "SELECT B.id as order_id 
-			FROM {$wpdb->edd_ordermeta} A, {$wpdb->edd_orders} B 
-			WHERE A.meta_key='bank_id' 
-			AND A.meta_value='{$mutation['bank_id']}' 
-			AND B.id=A.edd_order_id 
-			AND B.status='pending' 
-			AND B.total={$mutation['amount']}";
+			$sql = $wpdb->prepare(
+				"
+				SELECT B.id AS order_id
+				  FROM {$wpdb->edd_ordermeta} A
+				  JOIN {$wpdb->edd_orders}   B ON B.id = A.edd_order_id
+				 WHERE A.meta_key   = %s
+				   AND A.meta_value = %s
+				   AND B.status     = %s
+				   AND B.total      = %f
+				",
+				'bank_id',
+				$mutation['bank_id'],
+				'pending',
+				$mutation['amount']
+			);
 
-			$query = $wpdb->get_row($sql);
+			$query = $wpdb->get_results($sql);
+			
+			
+			if (preg_match('/va$/i', $mutation['bank']['bank_type']) === 1 || $mutation['bank']['bank_type'] === 'qris') {
+				$payment_key = $mutation['payment_detail']['order_id'] ?? null;
+				$sql = $wpdb->prepare(
+					"
+					SELECT B.id AS order_id
+					  FROM {$wpdb->edd_orders}   B
+					  JOIN {$wpdb->edd_ordermeta} A ON B.id = A.edd_order_id
+					 WHERE B.payment_key = %s
+					   AND B.total       = %f
+					   AND B.status      = %s
+					   AND A.meta_key    = %s
+					   AND A.meta_value  = %s
+					",
+					$payment_key,
+					$mutation['amount'],
+					'pending',
+					'bank_id',
+					$mutation['bank_id']
+				);
 
-			if(empty($query)){
-				return "OK";
+				$query = $wpdb->get_results( $sql );
 			}
 
-			if( !empty($query->order_id)) {
+			$order_id = intval($query[0]->order_id);
+
+			if(empty($query)){
+				throw new Exception("Order ID dengan Amount : {$mutation['amount']} Tidak Ditemukan");
+			}
+
+			if(count($query) > 1) {
 				$admin_email = get_bloginfo('admin_email');
 				$message = sprintf( __( 'Hai Admin.' ) ) . "\r\n\r\n";
 				$message .= sprintf( __( 'Ada order yang sama, dengan nominal Rp %s' ), $mutation['amount'] ). "\r\n\r\n";
 				$message .= sprintf( __( 'Mohon dicek manual.' ) ). "\r\n\r\n";
 				wp_mail( $admin_email, sprintf( __( '[%s] Ada nominal order yang sama - Moota' ), get_option('blogname') ), $message );
+				throw new Exception("Duplikasi Order Ditemukan Sebanyak " . count($query) . "! Silahkan Check Secara Manual Ya!");
+			}
 
-				$updated = edd_update_payment_status( $query->order_id, 'publish' );
+			if( !empty($order_id)) {
+
+				$updated = edd_update_payment_status( $order_id, $paid_status ?? 'publish' );
 
 				if ($updated) {
 
@@ -329,65 +366,6 @@ class MootaWebhook {
 			}
 		}
 	}
-
-	private static function updateWCUniqueNote(array $mutations)
-{
-    global $wpdb;
-    $moota_settings = get_option("moota_settings", []);
-    $hpos_enabled = get_option('woocommerce_custom_orders_table_enabled', 'no');
-
-    $db_prefix = $wpdb->prefix;
-    $backup_table = $db_prefix . 'wc_orders_meta';
-    $backup_order_table = $db_prefix . 'wc_orders';
-
-    $status_paid = array_get($moota_settings, "moota_wc_success_status", "completed");
-
-    // Sesuaikan status berdasarkan HPOS
-    $status_condition = $hpos_enabled === 'yes' ? 'pending' : 'wc-pending';
-
-    $sql = $wpdb->prepare("
-        SELECT A.order_id as order_id, A.meta_value AS unique_note, B.total_amount AS total 
-        FROM {$backup_table} A 
-        INNER JOIN {$backup_order_table} B 
-            ON A.order_id = B.id 
-        WHERE A.meta_key = 'moota_mutation_note_tag'
-            AND B.status = %s
-    ", $status_condition);
-
-    $meta = $wpdb->get_row($sql);
-
-    if (empty($meta)) {
-        return false;
-    }
-
-    $order_founds = 0;
-
-    foreach ($mutations as $mutation) {
-        $note_code = strtolower(trim($meta->moota_note_code));
-        $description = strtolower(trim($mutation['description']));
-
-        if (
-            $mutation['amount'] == $meta->total 
-            && strpos($description, $note_code) !== false
-        ) {
-            $order = wc_get_order($meta->order_id);
-
-            if ($order && $order->get_order_number()) {
-                $order->update_status($status_paid);
-                
-        self::addLog("Melampirkan transaction ID ke Moota: Mutation ID " . $mutation['mutation_id']);
-            (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachTransactionId($mutation['mutation_id'], (string)$meta->order_id);
-            
-        self::addLog("Melampirkan platform ke Moota");
-            (new MootaPayment(array_get($moota_settings, "moota_v2_api_key")))->attachPlatform($mutation['mutation_id'], "WooCommerce");
-
-                $order_founds++;
-            }
-        }
-    }
-
-    return $order_founds > 0;
-}
 
 
 	private static function updateEDDUniqueNote(array $mutations)

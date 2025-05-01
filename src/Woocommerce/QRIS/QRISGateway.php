@@ -194,23 +194,22 @@ class QRISGateway extends WC_Payment_Gateway
         $selectedBankId = $this->get_option('account');
         $selectedBank = $this->get_selected_bank($selectedBankId);
         $moota_settings = get_option('moota_settings', []);
-
+    
         // Validasi bank yang dipilih
         if (!$selectedBank || !$this->is_bank_type_match($selectedBank['bank_type'])) {
             throw new Exception('Rekening tidak valid atau tidak sesuai dengan tipe gateway');
         }
-
+    
         $failed_option  = array_get($moota_settings, 'moota_failed_redirect_url');
         $pending_option = array_get($moota_settings, 'moota_pending_redirect_url');
         $success_option = array_get($moota_settings, 'moota_success_redirect_url');
-
+    
         // Ambil referer jika tersedia
         $referer = $_SERVER['HTTP_REFERER'] ?? home_url();
-
-        
+    
         // URL detail produk (misalnya produk pertama dari order)
         $items = $order->get_items();
-
+    
         if (count($items) > 1) {
             // Redirect ke halaman shop jika lebih dari 1 produk
             $product_url = wc_get_page_permalink('shop');
@@ -220,30 +219,44 @@ class QRISGateway extends WC_Payment_Gateway
             $product_url = get_permalink($first_product->get_product_id());
         }
         $first_product = reset($items);
-
-        // Mapping setting ke URL
-        $failed_redirect = match ($failed_option) {
-            'last_visited' => $referer,
-            'Detail Produk' => $product_url,
-            'thanks_page' => $order->get_checkout_order_received_url(),
-        };
-
-        $pending_redirect = match ($pending_option) {
-            'last_visited' => $referer,
-            'Detail Produk' => $product_url,
-            'thanks_page' => $order->get_checkout_order_received_url(),
-        };
     
-        $success_redirect = match ($success_option) {
-            'last_visited' => $referer,
-            'Detail Produk' => $product_url,
-            'thanks_page' => $order->get_checkout_order_received_url(),
-        };
-
+        // Mapping setting ke URL dengan if-else untuk redirect gagal
+        if ($failed_option === 'last_visited') {
+            $failed_redirect = $referer;
+        } elseif ($failed_option === 'Detail Produk') {
+            $failed_redirect = $product_url;
+        } elseif ($failed_option === 'thanks_page') {
+            $failed_redirect = $order->get_checkout_order_received_url();
+        } else {
+            throw new Exception('Pilihan redirect gagal tidak valid');
+        }
+    
+        // Mapping setting ke URL dengan if-else untuk redirect pending
+        if ($pending_option === 'last_visited') {
+            $pending_redirect = $referer;
+        } elseif ($pending_option === 'Detail Produk') {
+            $pending_redirect = $product_url;
+        } elseif ($pending_option === 'thanks_page') {
+            $pending_redirect = $order->get_checkout_order_received_url();
+        } else {
+            throw new Exception('Pilihan redirect pending tidak valid');
+        }
+    
+        // Mapping setting ke URL dengan if-else untuk redirect sukses
+        if ($success_option === 'last_visited') {
+            $success_redirect = $referer;
+        } elseif ($success_option === 'Detail Produk') {
+            $success_redirect = $product_url;
+        } elseif ($success_option === 'thanks_page') {
+            $success_redirect = $order->get_checkout_order_received_url();
+        } else {
+            throw new Exception('Pilihan redirect sukses tidak valid');
+        }
+    
         return MootaTransaction::request(
-            $failed_redirect,
-            $pending_redirect,
-            $success_redirect,
+            !empty($failed_redirect) ? $failed_redirect : self::get_return_url($order),
+            !empty($pending_redirect) ? $pending_redirect : self::get_return_url($order),
+            !empty($success_redirect) ? $success_redirect : self::get_return_url($order),
             $order_id,
             $selectedBankId,
             "",
@@ -284,7 +297,7 @@ class QRISGateway extends WC_Payment_Gateway
                             <p class="font-semibold">Gunakan Pembayaran dengan <?= strtoupper($this->gateway) ?> dari Moota dan Winpay.</p>
                         </div>
                     </div>
-                    <p class="text-sm">Pembayaran akan kadaluarsa dalam <?php echo get_option('woocommerce_hold_stock_minutes', []) / 60 ?> jam</p>
+                    <p class="text-sm">Pembayaran akan kadaluarsa dalam <?php echo get_option('woocommerce_hold_stock_minutes', []) ?> menit</p>
                 <?php endif; ?>
             </div>
 <?php

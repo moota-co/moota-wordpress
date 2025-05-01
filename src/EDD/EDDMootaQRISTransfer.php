@@ -8,7 +8,7 @@ use Moota\Moota\MootaApi;
 use Moota\MootaSuperPlugin\Concerns\MootaPayment;
 use Moota\MootaSuperPlugin\Contracts\MootaWebhook;
 
-class EDDMootaBankTransfer {
+class EDDMootaQRISTransfer {
     /**
      * Instance
      */
@@ -20,12 +20,12 @@ class EDDMootaBankTransfer {
      *
      * @access private
      * @since  0.1
-     * @return EDDMootaBankTransfer instance
+     * @return EDDMootaQRISTransfer instance
      */
     static function getInstance() {
 
-        if ( ! isset( self::$instance ) && ! ( self::$instance instanceof EDDMootaBankTransfer ) ) {
-            self::$instance = new EDDMootaBankTransfer;
+        if ( ! isset( self::$instance ) && ! ( self::$instance instanceof EDDMootaQRISTransfer ) ) {
+            self::$instance = new EDDMootaQRISTransfer;
         }
 
         return self::$instance;
@@ -65,64 +65,30 @@ class EDDMootaBankTransfer {
 
     public function register_gateway( $gateways ) 
 {
-    $banks = get_option('moota_list_banks', []);
+    $banks = get_option('moota_list_accounts', []);
+    $edd_settings = get_option('edd_settings', []);
+    $qris_label = array_get($edd_settings, 'moota_qris_label', []);
 
     foreach($banks ?? [] as $bank)
     {
         // Cek apakah bank_type berakhiran 'va' atau 'qris'
         $bankType = $bank['bank_type'];
-        if ($bankType === 'qris' || 
-            preg_match('/va$/i', $bankType) || 
-            $bankType == 'winpay' ||
-            $bankType == 'winpayProduction' ||
-            $bankType == 'offline') {
-            continue; // Lewati bank ini jika memenuhi kondisi
+        
+        if ($bankType === 'qris') {
+            $gateways[$bank['bank_id']] = array(
+                'admin_label' => __("Moota - " . strtoupper($bankType), 'moota-edd'),
+                'checkout_label' => __($qris_label ? $qris_label : "Moota - " . strtoupper($bankType), 'moota-edd'),
+                'confirmation_label' => __($qris_label ? $qris_label : "Moota - " . strtoupper($bankType), 'moota-edd'),
+            );
+
+    
+            add_action( "edd_{$bank['bank_id']}_cc_form", '__return_false' );
+            add_action( "edd_gateway_{$bank['bank_id']}", array( $this, 'process_payment' ) );
         }
-
-        // Konversi tipe bank
-        $bankTypeConvert = $this->convert_bank_type($bankType);
-
-        $gateways[$bank['bank_id']] = array(
-            'admin_label' => __("Moota - {$bankTypeConvert} ({$bank['atas_nama']})", 'moota-edd'),
-            'checkout_label' => __("Transfer Bank - {$bankTypeConvert}", 'moota-edd'),
-            'confirmation_label' => __("Transfer Bank - {$bankTypeConvert} - {$bank['atas_nama']} / {$bank['account_number']}", 'moota-edd'),
-        );
-
-        add_action( "edd_{$bank['bank_id']}_cc_form", '__return_false' );
-        add_action( "edd_gateway_{$bank['bank_id']}", array( $this, 'process_payment' ) );
+        
     }
 
     return $gateways;
-}
-
-// Fungsi untuk mengonversi tipe bank
-private function convert_bank_type($bankType) {
-    $conversion_map = array(
-        'mayBank' => 'MayBank',
-        'btnBisnis' => 'BTN Bisnis',
-        'bcaSyariahV2' => 'BCA Syariah',
-        'bniV2' => 'BNI',
-        'bniSyariahV2' => 'BNI Syariah',
-        'bniBisnisV2' => 'BNI Bisnis',
-        'bniBisnisSyariahV2' => 'BNI Bisnis Syariah',
-        'bsiV2' => 'Bank Syariah Indonesia',
-        'bsiGiro' => 'Bank Syariah Indonesia Giro',
-        'briCmsV2' => 'BRI CMS',
-        'briCmsQlola' => 'BRI CMS QLOLA',
-        'mandiriMcm2V2' => 'Mandiri MCM 2',
-        'megaSyariahCms' => 'Mega Syariah CMS',
-        'mandiriKopra' => 'Kopra Mandiri',
-        'muamalatV2' => 'Muamalat',
-        'ibbizBri' => 'Ibbiz BRI',
-        'bjbBisnis' => 'BJB Bisnis',
-        'bcaV3' => 'BCA',
-        'bcaGiroV2' => 'BCA Giro',
-        'mandiriLivin' => 'Mandiri Livin',
-        'jenius' => 'Jenius',
-        'jago' => 'Jago',
-    );
-
-    return isset($conversion_map[$bankType]) ? $conversion_map[$bankType] : $bankType; // Kembalikan tipe yang sudah dikonversi atau tipe asli jika tidak ada
 }
     
     /**
@@ -187,6 +153,11 @@ private function convert_bank_type($bankType) {
     public function process_payment( $purchase_data ) 
     {
         $bank_id = $purchase_data['gateway'];
+        if (!$purchase_data['post_data']['edd_phone']) {
+            edd_set_error('phone_required', 'Untuk Pembayaran Via QRIS, Silahkan Masukkan No.Telp!');
+            edd_send_back_to_checkout();
+            return;
+        }
         
         if(empty($bank_id)){
             wp_die( __( 'Nonce verification has failed', 'moota-edd' ), __( 'Error', 'moota-edd' ), array( 'response' => 403 ) );
@@ -199,20 +170,19 @@ private function convert_bank_type($bankType) {
 
         $moota_settings = get_option("moota_settings", []);
         $edd_settings = get_option('edd_settings', []);
-        $banks = get_option('moota_list_banks', []);
-        $bank_account_number = '';
+        $banks = get_option('moota_list_accounts', []);
+        $bank_label = '';
 
         foreach ($banks as $bank) {
             if (isset($bank['bank_id']) && $bank['bank_id'] === $bank_id) {
-                $bank_account_number    = $bank['account_number'] ?? '';
-                $bank_holder            = $bank['atas_nama'];
+                $bank_label = $bank['bank_type'] ?? '';
                 break;
             }
         }
 
-        $gateway_label = 'Bank Transfer';
-        if ($bank_account_number !== '') {
-            $gateway_label .= " - {$bank_account_number} A.N ({$bank_holder})" ;
+        $gateway_label = 'Moota ';
+        if ($bank_label !== '') {
+            $gateway_label .= ' - ' . strtoupper($bank_label);
         }
 
         $errors = edd_get_errors();
@@ -240,19 +210,16 @@ private function convert_bank_type($bankType) {
                 $payment['country']  = $purchase_data['user_info']['address']['country'];
             }
 
-            $unique_code = array_get($edd_settings, "enable_moota_unique_code");
-            $unique_name = "Kode Unik";
-            $unique_type = array_get($moota_settings, "moota_unique_code_type", "increase_total");
-            $unique_start = array_get($moota_settings, "start_moota_unique_code", 1);
-            $unique_end = array_get($moota_settings, "end_moota_unique_code", 999);
+            /** Record the pending payment */
+            $payment = edd_insert_payment( $payment );
 
-            if ( $unique_code  && (int) $purchase_data['price'] > 0) {
-                $amount = rand($unique_start, $unique_end);
-                if ($unique_type == 'decrease') {
-                    $amount = $amount * -1;
-                }
-                EDD()->fees->add_fee( $amount, $unique_name, 'moota_unique_code' );
+            if(!$payment){
+                wp_die( __( 'Nonce verification has failed', $bank_id ), __( 'Error', $bank_id ), array( 'response' => 500 ) );
             }
+            
+            $payment_model = new \EDD_Payment($payment);
+            
+            $payment_model->add_meta("bank_id", $bank_id, true);
 
             $items = [];
 
@@ -264,22 +231,17 @@ private function convert_bank_type($bankType) {
                 ];
 
             }
+            $total = 0;
 
-                if(!empty($unique_code)){
-                    $items[] = [
-                        'name' => 'Kode Unik',
-                        'qty' => 1,
-                        'price' => $amount
-                    ];
-                }
+            foreach ($items as $item) {
+                $total += $item['price'] * $item['qty'];
+            }
 
-                $total = 0;
-                foreach ($items as $item) {
-                    $total += $item['price'] * $item['qty'];
-                }
-            
-            /** Record the pending payment */
-            $payment = edd_insert_payment( $payment );
+            if ($total < 10000) {
+                edd_set_error('total_kurang', __('Untuk Menggunakan Metode Pembayaran QRIS, Total harus melebihi atau sama dengan 10.000!', 'moota-edd'));
+                edd_send_back_to_checkout();
+                return;
+            }
             
             $customer_data = CustomerData::create(
                 $purchase_data['user_info']['first_name'] . " " . $purchase_data['user_info']['last_name'],
@@ -293,7 +255,7 @@ private function convert_bank_type($bankType) {
                 $customer_data,
                 $items,
                 $total,
-                null,
+                $bank_label,
                 "",
                 "Order From Easy Digital Downloads",
                 edd_get_receipt_page_uri($payment),
@@ -305,31 +267,18 @@ private function convert_bank_type($bankType) {
 
             $transaction = MootaApi::createTransaction($create_transaction);
             MootaWebhook::addLog(
-                "Transaksi EDD dengan Moota Bank Transfer berhasil dibuat: \n" . 
+                "Transaksi EDD dengan Moota QRIS berhasil dibuat: \n" . 
                 print_r($transaction, true)
             );
 
-            if(!$payment){
-                wp_die( __( 'Nonce verification has failed', $bank_id ), __( 'Error', $bank_id ), array( 'response' => 500 ) );
-            }
-            
-            $payment_model = new \EDD_Payment($payment);
-            
-            $payment_model->add_meta("bank_id", $bank_id, true);
-            
-            if($unique_code){
-                $payment_model->add_meta("news_code", $this->generateRandomString(5), true);
-            }
-
-            EDD()->fees->remove_fee( 'moota_unique_code' );
+            $payment_model->add_meta("qris_url", $transaction->data->qr_url, true);
 
             // Empty the shopping cart
             edd_empty_cart();
 
-            if(!$transaction->data->payment_url){
+            if(empty($transaction->data->payment_url)){
                 wp_redirect(edd_get_receipt_page_uri($payment));
             }
-
             wp_redirect($transaction->data->payment_url);
             exit;
         }
@@ -408,11 +357,14 @@ private function convert_bank_type($bankType) {
 
     public function display_payment_detail(\EDD\Orders\Order $order)
     {
+
         $order_id = $order->__get("id");
+
+        $qris_url = edd_get_order_meta($order_id, 'qris_url', true);
 
         $bank_id = edd_get_order_meta($order_id, 'bank_id', true);
 
-        $edd_settings = get_option("edd_settings", []);
+        $edd_settings = get_option('edd_settings', []);
 
         $all_banks = get_option('moota_list_banks', []);
 
@@ -422,73 +374,21 @@ private function convert_bank_type($bankType) {
 
         }, ARRAY_FILTER_USE_BOTH );
 
-        
         $bank = array_pop($bank);
-        
-        $news_code = edd_get_order_meta($order_id, 'news_code', true);
-
         ?>
-            <div class="space-y-3">
-                <?php
-                    if(array_get($edd_settings, 'moota_bank_transfer_payment_detail') && $bank['bank_type'] != 'qris' && !preg_match('/va$/i', $bank['bank_type']) ){
-                ?>
-                    <h3>
-                        Instruksi Pembayaran
-                    </h3>
-                    <div class="p-3 border border-gray-200">
+            <?php
+                if(array_get($edd_settings, 'moota_qris_payment_instruction') && $bank['bank_type'] === 'qris'){
+            ?>
+                <h3>Instruksi Pembayaran</h3>
+                <div class="p-3 border border-gray-200">
 
-                        <?php echo nl2br($this->replacer(array_get($edd_settings, 'moota_bank_transfer_payment_detail'), [
-                            "[bank_account]" => $bank['account_number'],
-                            "[bank_name]" => self::convert_bank_type($bank['bank_type']),
-                            "[unique_note]" => $news_code ? "<span class='px-2 py-1 bg-green-500 text-white font-bold rounded-md'>".$news_code."</span>" : null,
-                            "[bank_holder]" => $bank['atas_nama'],
-                            "[bank_logo]" => "<img src='".$bank['icon']."'>"
+                        <?php echo nl2br($this->replacer(array_get($edd_settings, 'moota_qris_payment_instruction'), [
+                            "[bank_holder]" => $bank['username'],
+                            "[qr_image]" => "<img src='".$qris_url."'",
+                            "[bank_logo]" => "<img src='".$bank['icon']."'",
                         ])) ?>
-                    <div class="flex flex-row justify-between items-center">
-                            <span>
-                                Klik Button Berikut untuk Check Transaksimu
-                            </span>
-                        
-                        <div class="py-2">
-                            <button id="moota-get-mutation-button" class="text-white font-semibold px-4 py-2 bg-sky-300 rounded-lg">
-                                Check Status Pembayaran
-                            </button>
-                        </div>
-                    </div>
 
                     <?php } ?>
-
-                    <script>
-                        var gm_button = document.getElementById("moota-get-mutation-button");
-
-                        async function postData(url = "", data = {}) {
-                            toastr.info('Data sedang dicheck!');
-
-
-                            // Default options are marked with *
-                            const response = await fetch(url, {
-                                method: "POST", // *GET, POST, PUT, DELETE, etc.
-                                mode: "cors", // no-cors, *cors, same-origin
-                                cache: "no-cache", // *default, no-cache, reload, force-cache, only-if-cached
-                                credentials: "same-origin", // include, *same-origin, omit
-                                headers: {
-                                "Content-Type": "application/json",
-                                // 'Content-Type': 'application/x-www-form-urlencoded',
-                                },
-                                redirect: "follow", // manual, *follow, error
-                                referrerPolicy: "no-referrer", // no-referrer, *no-referrer-when-downgrade, origin, origin-when-cross-origin, same-origin, strict-origin, strict-origin-when-cross-origin, unsafe-url
-                                body: JSON.stringify(data), // body data type must match "Content-Type" header
-                            });
-
-                            location.reload();
-                        }
-
-
-                        gm_button.addEventListener("click", () => postData("/wp-json/internal/get-mutation-now", {
-                            bank_id:"<?php echo esc_attr($bank->bank_id); ?>"
-                        }));
-
-                    </script>
                 </div>
             </div>
         <?php
@@ -504,5 +404,4 @@ private function convert_bank_type($bankType) {
 
         return $parsed;
     }
-
 }

@@ -87,3 +87,29 @@ Fix :
 
 Requirement :
 - Versi PHP Minimal dari 7.4 -> 8.x
+
+## [2.1.0] - 2025/04/22
+Feature :
+- Mengganti Sistem Caching dari Doctrine (Library luar) ke Transients (Bawaan Wordpress)
+
+Fixes :
+- Fix bug Dimana Plugin Membutuhkan Versi 8.x Keatas (Versi 7.x bisa gunakan kembali)
+- Fix Bug Dimana jika Settings Redirect Optionnya Belum Pernah Diedit, Maka Akan Mengreturn Error saat memilih Payment Method Moota
+- Fix Bug Dimana EDD untuk Rupiah IDR Currency Tidak Muncul
+
+## [2.2.0] - 2025/05/01
+Feature :
+- Kini Plugin Moota Wordpress Telah diperbarui untuk Support Kebutuhan Transaksi Kamu Di EDD!
+- Menambahkan Setting Moota Khusus EDD yang terletak di : Downloads -> Settings -> Payments -> Moota
+- Menambahkan Payment Method Virtual Account dan QRIS dari Moota
+- Menambahkan Setting Status Payment Setelah Dibayar yang terletak di : Moota Settings -> EDD
+- Memindahkan Semua Halaman Receipt Ke Moota (Back to Merchant untuk Kembali Ke Halaman Receipt EDD)
+
+Fixes :
+- Fix Bug WooCommerce ketika Menggunakan Payment BCA akan Memunculkan 2x Payment Status, No.Rek dan Instruksi Pembayaran
+- Fix Bug WooCommerce Menampilkan Username Ibanking pada bank BCA (From Username -> Atas Nama)
+- Meminimalisir Penggunaan Fetch API Berlebih
+- Cleaning Code Untuk Method yang tidak lagi digunakan
+
+Security :
+- Menghindari penggunaan Raw SQL Query pada Proses Payment, Instruksi Pembayaran, Dan Webhook.

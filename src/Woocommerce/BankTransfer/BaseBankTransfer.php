@@ -315,7 +315,7 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
 
         foreach ($listSettings as $bank) {
             if ($bank['bank_id'] === $bankId) {
-                $username = $bank['username'];
+                $username = $bank['atas_nama'];
                 break; // Keluar dari loop setelah menemukan bank yang sesuai
             }
         }
@@ -369,7 +369,6 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
     // Ambil referer jika tersedia
     $referer = $_SERVER['HTTP_REFERER'] ?? home_url();
 
-    
     // URL detail produk (misalnya produk pertama dari order)
     $items = $order->get_items();
 
@@ -383,29 +382,41 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
     }
     $first_product = reset($items);
 
-    // Mapping setting ke URL
-    $failed_redirect = match ($failed_option) {
-        'last_visited' => $referer,
-        'Detail Produk' => $product_url,
-        'thanks_page' => $order->get_checkout_order_received_url(),
-    };
+    // Mapping setting ke URL dengan if-else
+    if ($failed_option === 'last_visited') {
+        $failed_redirect = $referer;
+    } elseif ($failed_option === 'Detail Produk') {
+        $failed_redirect = $product_url;
+    } elseif ($failed_option === 'thanks_page') {
+        $failed_redirect = $order->get_checkout_order_received_url();
+    } else {
+        throw new Exception('Pilihan redirect gagal tidak valid');
+    }
 
-    $pending_redirect = match ($pending_option) {
-        'last_visited' => $referer,
-        'Detail Produk' => $product_url,
-        'thanks_page' => $order->get_checkout_order_received_url(),
-    };
+    if ($pending_option === 'last_visited') {
+        $pending_redirect = $referer;
+    } elseif ($pending_option === 'Detail Produk') {
+        $pending_redirect = $product_url;
+    } elseif ($pending_option === 'thanks_page') {
+        $pending_redirect = $order->get_checkout_order_received_url();
+    } else {
+        throw new Exception('Pilihan redirect pending tidak valid');
+    }
 
-    $success_redirect = match ($success_option) {
-        'last_visited' => $referer,
-        'Detail Produk' => $product_url,
-        'thanks_page' => $order->get_checkout_order_received_url(),
-    };
+    if ($success_option === 'last_visited') {
+        $success_redirect = $referer;
+    } elseif ($success_option === 'Detail Produk') {
+        $success_redirect = $product_url;
+    } elseif ($success_option === 'thanks_page') {
+        $success_redirect = $order->get_checkout_order_received_url();
+    } else {
+        throw new Exception('Pilihan redirect sukses tidak valid');
+    }
 
     return MootaTransaction::request(
-        $failed_redirect,
-        $pending_redirect,
-        $success_redirect,
+        !empty($failed_redirect) ? $failed_redirect : self::get_return_url($order),
+        !empty($pending_redirect) ? $pending_redirect : self::get_return_url($order),
+        !empty($success_redirect) ? $success_redirect : self::get_return_url($order),
         $order_id,
         $selectedBankId,
         $this->get_option('enable_unique_code'),
@@ -460,7 +471,7 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
         }
         $data = [
             'account_number' => $bank['account_number'],
-            'account_holder' => $bank['username'],
+            'account_holder' => $bank['atas_nama'],
             'bank_logo'      => "<img src='".$bank['icon']."'>",
             'unique_code'    => "<span class='font-bold'>".$order->get_meta('moota_unique_code')."</span>",
             'bank_name'      => $this->bankCode,

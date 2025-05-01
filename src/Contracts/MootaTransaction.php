@@ -461,8 +461,6 @@ class MootaTransaction
 				ltrim($order->get_billing_phone(), "+")
 			);
 
-			
-			
 			try {
 				$item_fee = new \WC_Order_Item_Fee();
 				
@@ -486,13 +484,15 @@ class MootaTransaction
 				
 			}
 
-			$items[] = [
-				'name'		=> "Kode Unik",
-				'qty'		=> 1,
-				'price'		=> $item_fee->get_total() ?? 0,
-				'sku'		=> "unique_code"
-			];
-
+			if($with_unique_code){
+				$items[] = [
+					'name'		=> "Kode Unik",
+					'qty'		=> 1,
+					'price'		=> $item_fee->get_total() ?? 0,
+					'sku'		=> "unique_code"
+				];
+			}
+			
 			$create_transaction = CreateTransactionData::create(
 							"moota-bank-transfer#{$order_id}",
 							$account['bank_id'], 

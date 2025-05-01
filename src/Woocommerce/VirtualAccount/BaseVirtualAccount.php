@@ -120,6 +120,19 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
                 'title' => 'Nilai Biaya Admin',
                 'type' => 'number',
                 'default' => 0,
+                'custom_attributes' => array(
+                    'min'  => 0,
+                    'step' => 0.01
+                )
+            ],
+            'admin_fee_type' => [
+                'title' => 'Tipe Biaya Admin',
+                'type' => 'select',
+                'options' => [
+                    'fixed' => 'Biaya Tetap',
+                    'percent' => 'Persentase Total Belanja'
+                ],
+                'default' => 'fixed',
                 'description' => sprintf(
                     '<div class="admin-fee-description" style="margin-top:8px;color:#666; line-height:1.6;">
                         <strong>📝 Contoh Perhitungan:</strong><br>
@@ -135,19 +148,6 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
                     '<span class="percentage-example">20</span>',
                     '<span class="result-example">3.600</span>'
                 ),
-                'custom_attributes' => array(
-                    'min'  => 0,
-                    'step' => 0.01
-                )
-            ],
-            'admin_fee_type' => [
-                'title' => 'Tipe Biaya Admin',
-                'type' => 'select',
-                'options' => [
-                    'fixed' => 'Biaya Tetap',
-                    'percent' => 'Persentase Total Belanja'
-                ],
-                'default' => 'fixed'
             ]
         ];
     }
@@ -387,18 +387,18 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
     }
 
     public function process_payment($order_id)
-    {
-        $order = wc_get_order($order_id);
-        $selectedBankId = $this->get_option('account');
-        $selectedBank = $this->get_selected_bank($selectedBankId);
-        $moota_settings = get_option('moota_settings', []);
+{
+    $order = wc_get_order($order_id);
+    $selectedBankId = $this->get_option('account');
+    $selectedBank = $this->get_selected_bank($selectedBankId);
+    $moota_settings = get_option('moota_settings', []);
 
-        // Validasi bank yang dipilih
-        if (!$selectedBank || !$this->is_bank_type_match($selectedBank['bank_type'])) {
-            throw new Exception('Rekening tidak valid atau tidak sesuai dengan tipe gateway');
-        }
-        
-        // Ambil redirect setting dari admin
+    // Validasi bank yang dipilih
+    if (!$selectedBank || !$this->is_bank_type_match($selectedBank['bank_type'])) {
+        throw new Exception('Rekening tidak valid atau tidak sesuai dengan tipe gateway');
+    }
+
+    // Ambil redirect setting dari admin
     $failed_option  = array_get($moota_settings, 'moota_failed_redirect_url');
     $pending_option = array_get($moota_settings, 'moota_pending_redirect_url');
     $success_option = array_get($moota_settings, 'moota_success_redirect_url');
@@ -419,39 +419,53 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
     }
     $first_product = reset($items);
 
-    // Mapping setting ke URL
-    $failed_redirect = match ($failed_option) {
-        'last_visited' => $referer,
-        'Detail Produk' => $product_url,
-        'thanks_page' => $order->get_checkout_order_received_url(),
-    };
-
-    $pending_redirect = match ($pending_option) {
-        'last_visited' => $referer,
-        'Detail Produk' => $product_url,
-        'thanks_page' => $order->get_checkout_order_received_url(),
-    };
-
-    $success_redirect = match ($success_option) {
-        'last_visited' => $referer,
-        'Detail Produk' => $product_url,
-        'thanks_page' => $order->get_checkout_order_received_url(),
-    };
-
-        return MootaTransaction::request(
-            $failed_redirect,
-            $pending_redirect,
-            $success_redirect,
-            $order_id,
-            $selectedBankId,
-            "",
-            $this->get_option('admin_fee_type'),
-            $this->get_option('admin_fee_amount'),
-            "",
-            "",
-            $this->bankCode
-        );
+    // Mapping setting ke URL dengan if-else untuk redirect gagal
+    if ($failed_option === 'last_visited') {
+        $failed_redirect = $referer;
+    } elseif ($failed_option === 'Detail Produk') {
+        $failed_redirect = $product_url;
+    } elseif ($failed_option === 'thanks_page') {
+        $failed_redirect = $order->get_checkout_order_received_url();
+    } else {
+        throw new Exception('Pilihan redirect gagal tidak valid');
     }
+
+    // Mapping setting ke URL dengan if-else untuk redirect pending
+    if ($pending_option === 'last_visited') {
+        $pending_redirect = $referer;
+    } elseif ($pending_option === 'Detail Produk') {
+        $pending_redirect = $product_url;
+    } elseif ($pending_option === 'thanks_page') {
+        $pending_redirect = $order->get_checkout_order_received_url();
+    } else {
+        throw new Exception('Pilihan redirect pending tidak valid');
+    }
+
+    // Mapping setting ke URL dengan if-else untuk redirect sukses
+    if ($success_option === 'last_visited') {
+        $success_redirect = $referer;
+    } elseif ($success_option === 'Detail Produk') {
+        $success_redirect = $product_url;
+    } elseif ($success_option === 'thanks_page') {
+        $success_redirect = $order->get_checkout_order_received_url();
+    } else {
+        throw new Exception('Pilihan redirect sukses tidak valid');
+    }
+
+    return MootaTransaction::request(
+        !empty($failed_redirect) ? $failed_redirect : self::get_return_url($order),
+        !empty($pending_redirect) ? $pending_redirect : self::get_return_url($order),
+        !empty($success_redirect) ? $success_redirect : self::get_return_url($order),
+        $order_id,
+        $selectedBankId,
+        "",
+        $this->get_option('admin_fee_type'),
+        $this->get_option('admin_fee_amount'),
+        "",
+        "",
+        $this->bankCode
+    );
+}
 
     public function order_details($order)
     {
@@ -487,6 +501,7 @@ abstract class BaseVirtualAccount extends WC_Payment_Gateway
         echo '<tr class="moota-order-number-account-detail">';
         echo '<th scope="row" style="font-weight: 700;">' . __('Nomor VA', 'textdomain') . '</th>';
         echo '<td style="align-items: center;">';
+        
 
         // Cek status order
         if ($order->get_status() === 'cancelled') {
