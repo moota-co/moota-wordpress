@@ -389,9 +389,7 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
         $failed_redirect = $product_url;
     } elseif ($failed_option === 'thanks_page') {
         $failed_redirect = $order->get_checkout_order_received_url();
-    } else {
-        throw new Exception('Pilihan redirect gagal tidak valid');
-    }
+    } 
 
     if ($pending_option === 'last_visited') {
         $pending_redirect = $referer;
@@ -399,9 +397,7 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
         $pending_redirect = $product_url;
     } elseif ($pending_option === 'thanks_page') {
         $pending_redirect = $order->get_checkout_order_received_url();
-    } else {
-        throw new Exception('Pilihan redirect pending tidak valid');
-    }
+    } 
 
     if ($success_option === 'last_visited') {
         $success_redirect = $referer;
@@ -409,10 +405,8 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
         $success_redirect = $product_url;
     } elseif ($success_option === 'thanks_page') {
         $success_redirect = $order->get_checkout_order_received_url();
-    } else {
-        throw new Exception('Pilihan redirect sukses tidak valid');
-    }
-
+    } 
+    
     return MootaTransaction::request(
         !empty($failed_redirect) ? $failed_redirect : self::get_return_url($order),
         !empty($pending_redirect) ? $pending_redirect : self::get_return_url($order),

@@ -110,6 +110,7 @@ Fixes :
 - Fix Bug WooCommerce Menampilkan Username Ibanking pada bank BCA (From Username -> Atas Nama)
 - Meminimalisir Penggunaan Fetch API Berlebih
 - Cleaning Code Untuk Method yang tidak lagi digunakan
+- Fix Error Validation Failed, Success & Pending for Default Settings
 
 Security :
 - Menghindari penggunaan Raw SQL Query pada Proses Payment, Instruksi Pembayaran, Dan Webhook.
