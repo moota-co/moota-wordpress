@@ -373,7 +373,7 @@ class MootaWebhook {
 		global $wpdb;
 		$moota_settings = get_option("moota_settings", []);
 
-		$status_paid = array_get($moota_settings, "moota_wc_success_status", "completed");
+		$status_paid = array_get($moota_settings, "moota_wc_success_status", "processing");
 
 		$sql = "SELECT A.edd_order_id as order_id, A.meta_value AS unique_note, B.subtotal AS total 
 		FROM {$wpdb->edd_ordermeta} A, {$wpdb->edd_orders} B 

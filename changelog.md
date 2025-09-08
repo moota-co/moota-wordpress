@@ -114,3 +114,16 @@ Fixes :
 
 Security :
 - Menghindari penggunaan Raw SQL Query pada Proses Payment, Instruksi Pembayaran, Dan Webhook.
+
+## [2.2.1] - 2025/09/08
+Fixes :
+- Default untuk Status Payment ketika menggunakan method payment moota dibuah dari Completed -> Processing (Implementasi ini digunakan agar sesuai dengan yang ada di moota settings secara default)
+- Perbaikan Bug Perulangan Kata "Transfer" untuk BankTransfer (Patch Sebelumnya : Bank - BCA TransferTransfer)
+
+Feature :
+- Menambahkan Beberapa Asset yang diperlukan untuk kebutuhan logo Payment Moota
+
+Testing :
+- Tested up to Woocommerce 6.8.2
+- Tested WooCommerce Up to 10.1.2
+- Tested Easy Digital Download 3.5.1

@@ -14,7 +14,6 @@ use Throwable;
 abstract class BaseBankTransfer extends WC_Payment_Gateway
 {
     public $bankCode;
-    public $bankName;
     public $defaultAccountNumber;
     public $defaultAccountHolder;
     public $list_banks = [];
@@ -22,8 +21,8 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
     public function __construct()
     {
         $this->id = 'moota_' . strtolower($this->bankCode) . '_transfer';
-        $this->method_title = $this->bankName;
-        $this->method_description = 'Pembayaran via ' . $this->bankName;
+        $this->method_title = $this->bankCode . ' - Bank Transfer';
+        $this->method_description = 'Pembayaran via ' . $this->bankCode . ' Transfer menggunakan Moota';
         $this->has_fields = true;
 
         $this->init_form_fields();
@@ -76,19 +75,19 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
             'enabled' => [
                 'title' => 'Enable/Disable',
                 'type' => 'checkbox',
-                'label' => 'Aktifkan Pembayaran ' . $this->bankName,
+                'label' => 'Aktifkan Pembayaran ' . $this->bankCode,
                 'default' => 'yes'
             ],
             'title' => [
                 'title' => 'Judul',
                 'type' => 'text',
-                'default' => $this->bankName . "Transfer",
+                'default' => $this->bankCode . " - Bank Transfer",
                 'desc_tip' => true,
             ],
             'description' => [
                 'title' => 'Deskripsi',
                 'type' => 'textarea',
-                'default' => 'Transfer ke rekening ' . $this->bankName,
+                'default' => 'Transfer ke rekening ' . $this->bankCode . ' yang tersedia',
             ],
             'account' => [
                 'title'       => "Pilih Akun {$this->bankCode}",
@@ -249,7 +248,7 @@ abstract class BaseBankTransfer extends WC_Payment_Gateway
             <div class="moota-bank-details"> <!-- Hapus atribut name -->
 
                 <?php if (empty($selectedBank)): ?>
-                    <p class="error">Kami belum memiliki Metode Transfer untuk <?php echo $this->bankName; ?>.</p>
+                    <p class="error">Kami belum memiliki Metode Transfer untuk <?php echo $this->bankCode; ?>.</p>
                 <?php else: ?>
                     <input
                         type="hidden"

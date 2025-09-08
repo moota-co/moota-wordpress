@@ -5,9 +5,10 @@ use Moota\MootaSuperPlugin\Woocommerce\BankTransfer\BaseBankTransfer;
 
 class BSIGateway extends BaseBankTransfer {
     public $bankCode = 'BSI';
-    public $bankName = 'BSI - Bank Transfer';
+    public $icon;
 
     public function __construct() {
         parent::__construct();
+        $this->icon = plugins_url( 'assets/img/logo/BSI/BSI.png', MOOTA_FULL_PATH );
     }
 }

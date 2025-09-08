@@ -16,6 +16,7 @@ class QRISGateway extends WC_Payment_Gateway
 {
     public $gateway = "QRIS";
     private $expiry_hours = 24;
+    public $icon;
 
     public function __construct()
     {
@@ -23,6 +24,7 @@ class QRISGateway extends WC_Payment_Gateway
         $this->method_title = "Moota " . $this->gateway;
         $this->method_description = 'Pembayaran via Moota ' . $this->gateway;
         $this->has_fields = true;
+        $this->icon = plugins_url( 'assets/img/logo/QRIS/QRIS.png', MOOTA_FULL_PATH );
 
         $this->init_form_fields();
         $this->init_settings();
