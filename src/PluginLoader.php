@@ -421,13 +421,18 @@ class PluginLoader
         // CSS untuk animasi putar
         const style = document.createElement('style');
         style.textContent = `
-            .dashicons.spin {
+            #moota-sync-banks .dashicons {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                vertical-align: middle;
+            }
+            #moota-sync-banks .dashicons.spin {
                 animation: moota-spin 1s infinite linear;
-                display: inline-block;
             }
             @keyframes moota-spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
+                0% { rotate: 0deg; }
+                100% { rotate: 360deg; }
             }
         `;
         document.head.appendChild(style);
