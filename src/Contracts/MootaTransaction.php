@@ -92,7 +92,7 @@ class MootaTransaction
 				];
 			}
 	
-			if(preg_match('/va$/i', $accountObject->bank_type)){
+			if(preg_match('/va$/i', $accountObject->bank_type) || strcasecmp($accountObject->bank_type, 'vaSandbox') === 0){
 				$customer = CustomerData::create(
 					$order->get_billing_first_name() . " " .$order->get_billing_last_name(),
 					$order->get_billing_email(),

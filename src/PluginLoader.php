@@ -102,7 +102,9 @@ class PluginLoader
 		}
 	
 		array_push($methods,
-			QRISGateway::class
+			QRISGateway::class,
+			"Moota\\MootaSuperPlugin\\Woocommerce\\Sandboxes\\BankTransferSandboxGateway",
+			"Moota\\MootaSuperPlugin\\Woocommerce\\Sandboxes\\VirtualAccountSandboxGateway"
 		);
 
 		// var_dump(print_r($methods)); die();
