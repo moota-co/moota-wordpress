@@ -216,9 +216,10 @@ class MootaTransaction
 					$order->update_meta_data("moota_total", $all_total);
 					$order->update_meta_data("moota_items", $items);
 					$order->update_meta_data("moota_admin_fee", $item_fees);
-					$order->update_meta_data("moota_mutation_tag", "moota_{$transaction->data->va_number}_{$all_total}");
+					$vaNumber = $transaction->data->va_number ?: ($account['account_number'] ?? '');
+					$order->update_meta_data("moota_mutation_tag", "moota_{$vaNumber}_{$all_total}");
 					$order->update_meta_data("moota_redirect", $transaction->data->payment_url);
-					$order->update_meta_data("moota_va_number", $transaction->data->va_number);
+					$order->update_meta_data("moota_va_number", $vaNumber);
 					$order->update_meta_data('moota_expire_at', $transaction->data->expired_at);
 					$order->update_meta_data('moota_username_bank', $transaction->data->bank_account->username);
 					$order->update_meta_data('moota_icon_url', $transaction->data->bank_account->icon);

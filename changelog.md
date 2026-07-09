@@ -1,5 +1,9 @@
 # Log Perubahan
 
+## [2.3.1] - 2025/07/09
+Fixes :
+- Fix mutation_tag untuk VA Sandbox bernilai moota__{amount} karena va_number kosong dari API, menyebabkan auto-konfirmasi webhook gagal
+
 ## [1.0.0] - 2024/01/06
 - Rilis awal untuk Moota WordPress
 - Menambahkan dukungan pembayaran transfer bank Easy Digital Downloads
