@@ -170,7 +170,7 @@ class MootaWebhook {
 		$order_id = null;
 	
 		// Tentukan mutation_tag berdasarkan jenis bank (VA atau non-VA)
-		if (preg_match('/va$/i', $bank_type)) {
+		if (preg_match('/va$/i', $bank_type) || strcasecmp($bank_type, 'vaSandbox') === 0) {
 			// VA: mutation_tag = "moota_{va_number}_{amount}"
 			$va_number = array_get($mutation, 'account_number', '');
 			$mutation_tag = "moota_" . trim($va_number) . "_{$amount}";
@@ -218,7 +218,7 @@ class MootaWebhook {
 		}
 	
 		// Validasi VA Number (hanya untuk VA)
-		if (preg_match('/va$/i', $bank_type)) {
+		if (preg_match('/va$/i', $bank_type) || strcasecmp($bank_type, 'vaSandbox') === 0) {
 			$va_number_in_order = $order->get_meta('moota_va_number');
 			$amount_in_order = $order->get_total();
 			

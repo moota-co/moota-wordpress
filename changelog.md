@@ -1,5 +1,13 @@
 # Log Perubahan
 
+## [2.3.2] - 2026/10/01
+Fixes :
+- Fix endpoint index rekening bank (ENDPOINT_BANK_INDEX) menjadi /api/v2/accounts/index
+
+## [2.3.1] - 2025/07/09
+Fixes :
+- Fix mutation_tag untuk VA Sandbox bernilai moota__{amount} karena va_number kosong dari API, menyebabkan auto-konfirmasi webhook gagal
+
 ## [1.0.0] - 2024/01/06
 - Rilis awal untuk Moota WordPress
 - Menambahkan dukungan pembayaran transfer bank Easy Digital Downloads
@@ -114,3 +122,12 @@ Fixes :
 
 Security :
 - Menghindari penggunaan Raw SQL Query pada Proses Payment, Instruksi Pembayaran, Dan Webhook.
+
+## [2.3.0] - 2025/07/08
+Feature :
+- Menambahkan Payment Gateway Moota - Bank Transfer (Sandbox) untuk testing pembayaran
+- Menambahkan Payment Gateway Moota - Virtual Account (Sandbox) untuk testing pembayaran
+
+Fixes :
+- Fix webhook tidak mendeteksi bank_type vaSandbox sehingga mutation tag & auto-konfirmasi gagal
+- Fix MootaTransaction tidak mengenali vaSandbox sebagai Virtual Account flow
