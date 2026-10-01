@@ -1,5 +1,9 @@
 # Log Perubahan
 
+## [2.3.2] - 2026/10/01
+Fixes :
+- Fix endpoint index rekening bank (ENDPOINT_BANK_INDEX) menjadi /api/v2/accounts/index
+
 ## [2.3.1] - 2025/07/09
 Fixes :
 - Fix mutation_tag untuk VA Sandbox bernilai moota__{amount} karena va_number kosong dari API, menyebabkan auto-konfirmasi webhook gagal
