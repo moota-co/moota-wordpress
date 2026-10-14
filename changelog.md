@@ -1,5 +1,9 @@
 # Log Perubahan
 
+## [2.3.3] - 2026/10/14
+Fixes :
+- Fix error "Total tidak sama dengan total items" saat createTransaction (VA, QRIS, Bank Transfer). Item transaksi kini dibangun dari komponen order aktual (produk, ongkir, semua fee termasuk dari plugin lain, dan pajak), dengan item penyeimbang otomatis agar total selalu sama dengan total item. Perhitungan harga produk memakai total baris order (setelah diskon) alih-alih harga katalog.
+
 ## [2.3.2] - 2026/10/01
 Fixes :
 - Fix endpoint index rekening bank (ENDPOINT_BANK_INDEX) menjadi /api/v2/accounts/index
