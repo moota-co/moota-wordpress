@@ -50,47 +50,6 @@ class MootaTransaction
 	
 			$items = [];
 			$product_names = []; // Array to hold product names
-			/**
-			 * @var $item WC_Order_Item_Product
-			 */
-			foreach ( $order->get_items() as $item ) {
-				$product = wc_get_product( $item->get_product_id() );
-	
-				$image_meta = wp_get_attachment_metadata( $item->get_product_id() );
-				$image_file = get_attached_file( $item->get_product_id(), false );
-	
-				$image_url = empty( $image_meta['original_image'] ) ? $image_file : path_join( dirname( $image_file ), $image_meta['original_image'] );
-	
-				if(empty($image_url)){
-					$image_url = get_the_post_thumbnail_url( $item->get_product_id() );
-				}
-	
-			}
-	
-			if ( $order->get_shipping_total() ) {
-				$items[] = [
-					'name'      => 'Ongkos Kirim',
-					'qty'       => 1,
-					'price'     => $order->get_shipping_total(),
-					'sku'       => 'shipping-cost',
-					'image_url' => ''
-				];
-			}
-	
-			$tax = 0;
-	
-			if ( $order->get_tax_totals() ) {
-				foreach ( $order->get_tax_totals() as $i ) {
-					$tax += $i->amount;
-				}
-				$items[] = [
-					'name'      => 'Pajak',
-					'qty'       => 1,
-					'price'     => $tax,
-					'sku'       => 'taxes-cost',
-					'image_url' => ''
-				];
-			}
 	
 			if(preg_match('/va$/i', $accountObject->bank_type) || strcasecmp($accountObject->bank_type, 'vaSandbox') === 0){
 				$customer = CustomerData::create(
@@ -153,36 +112,22 @@ class MootaTransaction
 				}
 
 				foreach ($order->get_items() as $item_id => $item) {
-					$product = $item->get_product(); // Dapatkan objek produk
-					
-					// Pastikan produk valid sebelum dimasukkan ke array
-					if ($product && is_a($product, 'WC_Product')) {
-						$items[] = [
-							'name'      => $item->get_name(),
-							'qty'       => $item->get_quantity(),
-							'price'     => $product->get_price(),
-							'sku'       => $product->get_sku() ?? "product", // Default "product" jika SKU kosong
-						];
-						$product_names[] = $item->get_name();
-					}
+					$product_names[] = $item->get_name();
 				}
 
-				$items[] = [
-					'name'		=> "Biaya Admin",
-					'qty'		=> 1,
-					'price'		=> $item_fees ?? 0,
-					'sku'		=> "admin_tax"
-				];
-				
 				$product_names_string = implode(', ', $product_names);
-				
+
+				$items     = self::buildItems( $order );
+				$total     = self::reconcile( $items, (int) round( $order->get_total() ) );
+				$all_total = $total;
+
 				try {
 					$create_transaction = CreateTransactionData::create(
 						"moota-va#{$order_id}",
 						$account['bank_id'], 
 						$customer,
 						$items,
-						$order->get_total(),
+						$total,
 						$account['bank_type'],
 						null,
 						"Order From WooCommerce, Products : {$product_names_string}",
@@ -301,27 +246,21 @@ class MootaTransaction
 					// Kumpulkan item produk
 					$items = [];
 					foreach ($order->get_items() as $item_id => $item) {
-						$product = $item->get_product();
-						if ($product && is_a($product, 'WC_Product')) {
-							$items[] = [
-								'name'  => $item->get_name(),
-								'qty'   => $item->get_quantity(),
-								'price' => $product->get_price(),
-								'sku'   => $product->get_sku() ?? "product",
-							];
-							$product_names[] = $item->get_name();
-						}
+						$product_names[] = $item->get_name();
 					}
 
 					$product_names_string = implode(', ', $product_names);
-			
+
+					$items = self::buildItems( $order );
+					$total = self::reconcile( $items, (int) round( $order->get_total() ) );
+
 					// Buat transaksi QRIS
 					$create_transaction = CreateTransactionData::create(
 						"moota-qris#{$order_id}",
 						$account['bank_id'], 
 						$customer,
 						$items,
-						$order->get_total(),
+						$total,
 						$account['bank_type'],
 						null,
 						"Order From WooCommerce, Products : {$product_names_string}",
@@ -440,18 +379,7 @@ class MootaTransaction
 			$note_code = $with_unique_code ? (new self)->generateRandomString(5):null;
 
 			foreach ($order->get_items() as $item_id => $item) {
-				$product = $item->get_product(); // Dapatkan objek produk
-				
-				// Pastikan produk valid sebelum dimasukkan ke array
-				if ($product && is_a($product, 'WC_Product')) {
-					$items[] = [
-						'name'      => $item->get_name(),
-						'qty'       => $item->get_quantity(),
-						'price'     => $product->get_price(),
-						'sku'       => $product->get_sku() ?? "product", // Default "product" jika SKU kosong
-					];
-					$product_names[] = $item->get_name();
-				}
+				$product_names[] = $item->get_name();
 			}
 
 			$product_names_string = implode(', ', $product_names);
@@ -485,21 +413,16 @@ class MootaTransaction
 				
 			}
 
-			if($with_unique_code){
-				$items[] = [
-					'name'		=> "Kode Unik",
-					'qty'		=> 1,
-					'price'		=> $item_fee->get_total() ?? 0,
-					'sku'		=> "unique_code"
-				];
-			}
-			
+			$items     = self::buildItems( $order );
+			$total     = self::reconcile( $items, (int) round( $order->get_total() ) );
+			$all_total = $total;
+
 			$create_transaction = CreateTransactionData::create(
 							"moota-bank-transfer#{$order_id}",
 							$account['bank_id'], 
 							$customer,
 							$items,
-							$order->get_total(),
+							$total,
 							$account['bank_type'],
 							null,
 							"Order From WooCommerce, Products : {$product_names_string}",
@@ -557,6 +480,85 @@ class MootaTransaction
 		} catch (Exception $e) {
 			
 		}
+	}
+
+	private static function buildItems( WC_Order $order ): array {
+		$items = [];
+
+		foreach ( $order->get_items() as $item ) {
+			$qty = (int) $item->get_quantity();
+
+			if ( $qty < 1 ) {
+				$qty = 1;
+			}
+
+			$product = $item->get_product();
+			$sku     = ( $product && $product->get_sku() ) ? $product->get_sku() : 'product';
+
+			self::pushItem( $items, $item->get_name(), $qty, (float) $item->get_total() / $qty, $sku );
+		}
+
+		if ( (float) $order->get_shipping_total() != 0.0 ) {
+			self::pushItem( $items, 'Ongkos Kirim', 1, (float) $order->get_shipping_total(), 'shipping-cost' );
+		}
+
+		foreach ( $order->get_fees() as $fee ) {
+			if ( (float) $fee->get_total() == 0.0 ) {
+				continue;
+			}
+
+			self::pushItem( $items, $fee->get_name(), 1, (float) $fee->get_total(), 'fee' );
+		}
+
+		$tax = (float) $order->get_total_tax();
+
+		if ( $tax != 0.0 ) {
+			self::pushItem( $items, 'Pajak', 1, $tax, 'taxes-cost' );
+		}
+
+		return $items;
+	}
+
+	private static function reconcile( array &$items, int $target ): int {
+		$sum  = self::itemsTotal( $items );
+		$diff = $target - $sum;
+
+		if ( abs( $diff ) >= 1 ) {
+			self::pushItem( $items, 'Penyesuaian', 1, $diff, 'adjustment' );
+
+			MootaWebhook::addLog(
+				sprintf(
+					'Moota reconcile: target=%d sum=%d diff=%d items=%s',
+					$target,
+					$sum,
+					$diff,
+					wp_json_encode( $items )
+				)
+			);
+
+			$sum = self::itemsTotal( $items );
+		}
+
+		return $sum;
+	}
+
+	private static function itemsTotal( array $items ): int {
+		$sum = 0;
+
+		foreach ( $items as $item ) {
+			$sum += (int) $item['price'] * (int) $item['qty'];
+		}
+
+		return $sum;
+	}
+
+	private static function pushItem( array &$items, string $name, int $qty, $price, string $sku ): void {
+		$items[] = [
+			'name'  => $name,
+			'qty'   => $qty,
+			'price' => (int) round( (float) $price ),
+			'sku'   => $sku,
+		];
 	}
 
 	private function generateRandomString($length = 10) {
